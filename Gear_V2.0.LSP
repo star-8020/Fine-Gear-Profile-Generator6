@@ -1,0 +1,2283 @@
+;Gear 그리기 LISP Ver 2.0
+
+;본 자료는 http://tro.kr에서만 받을 수 있습니다.
+
+
+;제작일 : 2009년 11월 28일
+;수정일 : 2013년 02월 06일
+
+;홈페이지 : http://tro.kr/
+
+;제작자 : e58000
+;E-mail : e58000@tro.kr
+
+
+;에러 검츌 코드
+;이 끝 원호가 작을 때(NoE=1):Involute:M2.0mm:P20.0:A1.0:D1.25:X1.1:B0.0:E0.05:C0.2:S20:Z17
+;이 끝 원호가 없을 때(NoE=2):Involute:M2.0mm:P20.0:A1.0:D1.25:X2.0:B0.0:E0.05:C0.2:S20:Z17
+;+전위로 인벌류트가 없을 때 (NoI=1):Involute:M2.0mm:P20.0:A1.0:D1.25:X4.0:B0.0:E0.05:C0.2:S20:Z17
+;-전위로 인벌류트가 없을 때 (NoI=-1):Involute:M2.0mm:P20.0:A1.0:D1.25:X-2.0:B0.0:E0.05:C0.2:S20:Z17
+;-백래쉬로 이 뿌리 원호가 없을 때 (NoR=2):Involute:M2.0mm:P20.0:A1.0:D1.25:X0.0:B-1.0:E0.05:C0.2:S20:Z17
+;-백래쉬로 이 뿌리 원호가 점일 때 (NoR=1):
+;트로벌류트 곡선이 원호 일 때(NoTr=1):Involute:M2.0mm:P20.0:A1.0:D1.25:X1.05:B0.0:E0.05:C0.2:S20:Z17
+;트로벌류트 곡선이 없을 때(NoTr=2):Involute:M2.0mm:P20.0:A1.0:D1.25:X1.25:B0.0:E0.05:C0.0:S20:Z17
+;-백래쉬로 트로벌류트 곡선이 없을 때(NoTr=-1):Involute:M2.0mm:P20.0:A1.0:D1.25:X0.0:B-2.0:E0.05:C0.2:S20:Z17
+;압력각이 커서 트로벌류트 곡선이 없을 때(NoTr=-1):Involute:M2.0mm:P45.0:A1.0:D1.25:X0.0:B0.0:E0.05:C0.2:S20:Z14
+
+
+
+  
+
+; gear명령으로 기어를 그리는 주 프로그램
+(DEFUN C:gear (/ cmdecho osmode orthomode clayer
+	       KeyIn KeyNumber KeyItem KeyUnit KeyState
+	       a0
+	       ais ats am ae aem
+	       cis cie cts cte cs UnderCut NoE NoR NoTr NoI
+	       xd yd x0 y0 xs ys xsm ysm xe ye xem yem
+	       m Z A D X B C E G mh me
+	       Nt Ni Nh Ne counter step rack
+	       buffer DrawSum BLine RLine GearLine ELine
+	       f0x f1x f0xi f0xt f0yi f0yt f1xi f1xt f1yi f1yt
+	      )
+
+
+
+  ;;;;;----- 서브 프로그램 시작 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+  ;;;;; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+  ;;;;; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+  ;;;;; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+  ;;;;; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+  ;;;;; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+
+  ;LISP가 처음 실행 돼면 초기 설정값을 정하는 서브 프로그램.
+  (defun gear_variable_initialization (/)
+    ;초기 변수 값을 정합니다.
+    (if (= OsLanguage nil) (setq OsLanguage (getvar "locale")));AutoCAD의 사용 언어를 알아 냅니다.
+    (if (or (= OsLanguage "KO") (= OsLanguage "KR")) (setq OsLanguage "KOR"))
+
+    (if (= dcl_point nil) (setq dcl_point (list -6 -9)))
+
+    (if (= GearType nil) (setq GearType "Involute"));치형의 종류 및 기어 종류를 선택합니다.
+
+    (if (= CenterPoint nil) (setq CenterPoint (list 0.0 0.0 0.0)));기어 중심점 초기값
+
+    (if (= SeriesNumber nil) (setq SeriesNumber (atoi "20")));치형의 총 곡선수의 초기값
+
+
+    (if (= InvoluteModule nil) (setq InvoluteModule 2.0));인벌류트 모듈의 초기 값
+    (if (= InvoluteModuleRatio nil) (setq InvoluteModuleRatio 1.0));인벌류트 모듈의 단위를 mm로 합니다.
+
+    (if (= InvoluteChangeRadius nil) (setq InvoluteChangeRadius 1));내륜기어일 때 모깎기값 바꾸기
+
+    (if (= EndRadius nil) (setq EndRadius 0.05));이끝 모깎기 반지름 초기값
+    (if (= CutRadius nil) (setq CutRadius 0.2));랙(Rack) 공구의 날끝 모깎기 반지름 초기값
+    (if (= EndRadiusRatio nil) (setq EndRadiusRatio 0.0));이끝 모깎기 반지름의 초기값을 비율로 함
+    (if (= CutRadiusRatio nil) (setq CutRadiusRatio 0.0));랙(Rack) 공구의 날끝 모깎기 반지름의 초기값을 비율로 함
+
+    (if (= PressAngle nil) (setq PressAngle 20.0));압력각 초기값
+
+    (if (= Modification nil) (setq Modification 0.0));전위계수(Modification Coefficient) 초기값
+    (if (= ModificationRatio nil) (setq ModificationRatio 0.0));전위계수(Modification Coefficient) 초기값을 비율로 함
+
+    (if (= Backlash nil) (setq Backlash 0.0));백래시 초기값
+    (if (= BacklashRatio nil) (setq BacklashRatio 1.0));백래시 초기값을 길이로 함
+
+    (if (= Upper nil) (setq Upper 1.0));이끝으로 증가 비율 초기값
+    (if (= Downer nil) (setq Downer 1.25));이뿌리로 증가 비율 초기값
+    (if (= UpperRatio nil) (setq UpperRatio 0.0));이끝으로 증가 비율 초기값을 비율로 함
+    (if (= DownerRatio nil) (setq DownerRatio 0.0));이뿌리로 증가 비율 초기값을 비율로 함
+
+    (if (= InvoluteTeeth nil) (setq InvoluteTeeth 17));인벌류트 기어 잇수 초기값
+
+
+    (if (= PartCycloidTeeth nil) (setq PartCycloidTeeth 15));부분 사이클로이드 기어 잇수 초기값
+
+
+    (if (= EpiCycloidMaking nil) (setq EpiCycloidMaking 6.0));외접 사이클로이드 창성원 지름의 초기 값
+    (if (= HypoCycloidMaking nil) (setq HypoCycloidMaking 6.0));내접 사이클로이드 창성원 지름의 초기 값
+    (if (= CycloidMakingRatio nil) (setq CycloidMakingRatio 1.0));사이클로이드 지름의 단위를 mm로 합니다.
+
+    (if (= CycloidGap nil) (setq CycloidGap 0.0));외접 사이클로이드 창성원 지름의 초기 값
+    (if (= CycloidGapRatio nil) (setq CycloidGapRatio 1.0));사이클로이드 지름의 단위를 mm로 합니다.
+
+    (if (= CycloidTeeth nil) (setq CycloidTeeth 2));사이클로이드 기어 잇수 초기값
+
+
+    (if (= ChainTeeth nil) (setq ChainTeeth 21));사이클로이드 기어 잇수 초기값
+
+
+    (if (= TrochoidTeeth nil) (setq TrochoidTeeth 3));트로코이드 기어 잇수 초기값
+
+
+    (if (= CylinderTeeth nil) (setq CylinderTeeth 12));사이클로이드 기어 잇수 초기값
+
+    (setq rack 0);랙 초기값
+
+    )
+
+
+
+
+  ;단위를 표시하는 서브 프로그램
+  (defun gear_unit_display (UnitDisplay /)
+    (cond
+      ((= UnitDisplay 1.0) (strcat "mm"))
+      ((= UnitDisplay 10.0) (strcat "Cm"))
+      ((= UnitDisplay 1000.0) (strcat "m"))
+      ((= UnitDisplay 1000000.0) (strcat "Km"))
+      ((= UnitDisplay 0.001) (strcat "um"))
+      ((= UnitDisplay 0.000001) (strcat "nm"))
+      (T (strcat ""))
+    )
+  )
+
+
+  ;단위를 계산하는 서브 프로그램
+  (defun gear_unit_calculation (UnitCalculation /)
+    (cond
+      ((= UnitCalculation "Km") (+ 1000000.0))
+      ((= UnitCalculation "m") (+ 1000.0))
+      ((= UnitCalculation "Cm") (+ 10.0))
+      ((= UnitCalculation "mm") (+ 1.0))
+      ((= UnitCalculation "um") (+ 0.001))
+      ((= UnitCalculation "nm") (+ 0.000001))
+      (T (+ 0.0))
+    )
+  )
+
+
+
+
+
+
+  ;인벌류트(involute) 치형 설정값 표시 서브 프로그램.
+  (defun involute_gear_item_display (/)
+    (if (= KeyItem "V")
+      (progn
+        (princ "\n") (princ GearType)
+        (princ ":M") (princ InvoluteModule) (princ (gear_unit_display InvoluteModuleRatio))
+        (princ ":P") (princ PressAngle)
+        (princ ":A") (princ Upper) (princ (gear_unit_display UpperRatio))
+        (princ ":D") (princ Downer) (princ (gear_unit_display DownerRatio))
+        (princ ":X") (princ Modification) (princ (gear_unit_display ModificationRatio))
+        (princ ":B") (princ Backlash) (princ (gear_unit_display BacklashRatio))
+        (princ ":E") (princ EndRadius) (princ (gear_unit_display EndRadiusRatio))
+        (princ ":C") (princ CutRadius) (princ (gear_unit_display CutRadiusRatio))
+        (princ ":S") (princ SeriesNumber)
+        (setq KeyItem "Blank")
+      )
+    )
+
+    (if (= OsLanguage "KOR")
+      (cond
+        ((= KeyItem "M") (princ "\n모듈 <") (princ InvoluteModule) (princ (gear_unit_display InvoluteModuleRatio)))
+        ((= KeyItem "P") (princ "\n압력각(Degrees) <") (princ PressAngle))
+        ((= KeyItem "A") (princ "\n치형의 높이(단위가 없으면 비율) <") (princ Upper)
+		         (princ (gear_unit_display UpperRatio)))
+        ((= KeyItem "D") (princ "\n치형의 깊이(단위가 없으면 비율) <") (princ Downer)
+		         (princ (gear_unit_display DownerRatio)))
+        ((= KeyItem "X") (princ "\n전위(단위가 없으면 비율) <") (princ Modification)
+		         (princ (gear_unit_display ModificationRatio)))
+        ((= KeyItem "B") (princ "\n백래시(단위가 없으면 비율) <") (princ Backlash)
+		         (princ (gear_unit_display BacklashRatio)))
+        ((= KeyItem "E") (princ "\n치형 끝 모깎기 반지름(단위가 없으면 비율) <") (princ EndRadius)
+		         (princ (gear_unit_display EndRadiusRatio)))
+        ((= KeyItem "C") (princ "\n컷팅공구 날끝 모서리 반지름(단위가 없으면 비율) <") (princ CutRadius)
+		         (princ (gear_unit_display CutRadiusRatio)))
+        (T (common_gear_item_display))
+      );End cond
+      (cond
+        ((= KeyItem "M") (princ "\nModule <") (princ InvoluteModule) (princ (gear_unit_display InvoluteModuleRatio)))
+        ((= KeyItem "P") (princ "\nPress angle(Degrees) <") (princ PressAngle))
+        ((= KeyItem "A") (princ "\nThe height of the tooth(If no unit, is ratio) <") (princ Upper)
+		         (princ (gear_unit_display UpperRatio)))
+        ((= KeyItem "D") (princ "\nThe depth of tooth(If no unit, is ratio) <") (princ Downer)
+		         (princ (gear_unit_display DownerRatio)))
+        ((= KeyItem "X") (princ "\nModification(If no unit, is ratio) <") (princ Modification)
+		         (princ (gear_unit_display ModificationRatio)))
+        ((= KeyItem "B") (princ "\nBacklash(If no unit, is ratio) <") (princ Backlash)
+		         (princ (gear_unit_display BacklashRatio)))
+        ((= KeyItem "E") (princ "\nEnd tooth fillet radius(If no unit, is ratio) <") (princ EndRadius)
+		         (princ (gear_unit_display EndRadiusRatio)))
+        ((= KeyItem "C") (princ "\nEnd cutter fillet radius(If no unit, is ratio) <") (princ CutRadius)
+		         (princ (gear_unit_display CutRadiusRatio)))
+        (T (common_gear_item_display))
+      );End cond
+    );End if
+
+    (if (= KeyItem "Blank")
+      (progn
+        (if (= OsLanguage "KOR")
+	  (princ "\n인벌류트 기어 잇수(음수는 내접기어, 소수는 랙) 또는 [V/M/P/A/D/X/B/E/C/S/T] <")
+	  (princ "\nInvolute gear teeth(minus is internal gear, decimal is rack) or [V/M/P/A/D/X/B/E/C/S/T] <")
+        )
+        (princ InvoluteTeeth)
+      )
+    )
+
+    (princ ">:")
+  )
+
+
+
+
+
+
+  ;인벌류트(involute) 치형의 설정값을 변경하는 서브 프로그램.
+  (defun involute_gear_value_item_setting (/)
+    (if (/= KeyCounter 0) (princ KeyNumber))
+
+    (setq buffer (atof KeyNumber))
+
+    (if (/= KeyUnit nil)
+      (progn
+        (cond
+	  ((= KeyItem "M")
+	   (setq InvoluteModuleRatio (gear_unit_calculation KeyUnit))
+	   (if (= InvoluteModuleRatio 0) (setq InvoluteModuleRatio 1.0))
+	  )
+	  ((= KeyItem "A") (setq UpperRatio (gear_unit_calculation KeyUnit)))
+	  ((= KeyItem "D") (setq DownerRatio (gear_unit_calculation KeyUnit)))
+	  ((= KeyItem "X") (setq ModificationRatio (gear_unit_calculation KeyUnit)))
+	  ((= KeyItem "B") (setq BacklashRatio (gear_unit_calculation KeyUnit)))
+	  ((= KeyItem "E") (setq EndRadiusRatio (gear_unit_calculation KeyUnit)))
+	  ((= KeyItem "C") (setq CutRadiusRatio (gear_unit_calculation KeyUnit)))
+        );End cond
+        (if (/= KeyCounter 0) (princ KeyUnit))
+      )
+      (cond
+        ((= KeyItem "M") (setq InvoluteModuleRatio 1))
+        ((= KeyItem "A") (setq UpperRatio 0))
+        ((= KeyItem "D") (setq DownerRatio 0))
+        ((= KeyItem "X") (setq ModificationRatio 0))
+        ((= KeyItem "B") (setq BacklashRatio 0))
+        ((= KeyItem "E") (setq EndRadiusRatio 0))
+        ((= KeyItem "C") (setq CutRadiusRatio 0))
+      );End cond
+    )
+
+    (cond
+      ((= KeyItem "M")
+       (if (> buffer 0)
+         (progn (setq InvoluteModule buffer) (setq KeyItem "Blank"))
+         (if (= OsLanguage "KOR") (princ "0이나 음수는 사용 할 수 없습니다.") (princ "Zero or negative numbers are not available."))
+       )
+      )
+      ((= KeyItem "P")
+       (if (> buffer 0)
+         (progn (setq PressAngle (atof KeyNumber)) (setq KeyItem "Blank"))
+         (if (= OsLanguage "KOR") (princ "0이나 음수는 사용 할 수 없습니다.") (princ "Zero or negative numbers are not available."))
+       )
+      )
+      ((= KeyItem "A") (setq Upper buffer) (setq KeyItem "Blank"))
+      ((= KeyItem "D") (setq Downer buffer) (setq KeyItem "Blank"))
+      ((= KeyItem "X") (setq Modification buffer) (setq KeyItem "Blank"))
+      ((= KeyItem "B") (setq Backlash buffer) (setq KeyItem "Blank"))
+      ((= KeyItem "E")
+       (if (>= buffer 0)
+         (progn (setq EndRadius buffer) (setq KeyItem "Blank"))
+         (if (= OsLanguage "KOR") (princ "음수는 사용 할 수 없습니다.") (princ "Negative numbers are not available."))
+       )
+      )
+      ((= KeyItem "C")
+       (if (>= buffer 0)
+         (progn (setq CutRadius buffer) (setq KeyItem "Blank"))
+         (if (= OsLanguage "KOR") (princ "음수는 사용 할 수 없습니다.") (princ "Negative numbers are not available."))
+       )
+      )
+      ((= KeyItem "S")
+       (if (>= (atoi KeyNumber) 2)
+         (progn (setq SeriesNumber (atoi KeyNumber)) (setq KeyItem "Blank"))
+         (if (= OsLanguage "KOR") (princ "값이 너무 작습니다.") (princ "Value is too small."))
+       )
+      )
+      (T
+       (cond
+         ((= (atof KeyNumber) 0) (if (= OsLanguage "KOR") (princ "0은 사용 할 수 없습니다.") (princ "Zero are not available.")))
+         ((< (abs (atof KeyNumber)) 1)
+	  (setq counter 1)
+	  (while (> counter 0)
+	    (if (= (substr KeyNumber counter 1) ".")
+	      (progn
+	        (if (= counter 1)
+		  (setq KeyNumber (substr KeyNumber (1+ counter) (strlen KeyNumber)))
+		  (setq KeyNumber (strcat (substr KeyNumber 1 (1- counter)) (substr KeyNumber (1+ counter) (strlen KeyNumber))))
+	        )
+	        (setq rack (atoi KeyNumber))
+	        (setq KeyItem "Exit")
+	        (setq counter (* -1 counter))
+	      );End progn
+	    );End if
+	    (setq counter (1+ counter))
+	  );End while
+         )
+         (T
+	  (setq InvoluteTeeth (atoi KeyNumber))
+	  (cond
+	    ((= KeyIn "RACK") (setq rack (atoi KeyNumber)))
+	    ((= KeyIn "R") (setq rack (atoi KeyNumber)))
+	  )
+	  (setq KeyItem "Exit")
+         )
+       );End cond
+      )
+    );End cond
+
+    (setq KeyNumber nil)
+    (setq KeyUnit nil)
+  )
+
+
+
+
+
+
+
+
+  ;인벌류트(involute) 치형 작도를 위해 초기값을 계산하는 서브프로그램.
+  (defun involute_gear_base_value_calculation (/)
+
+    (setq m (* InvoluteModule InvoluteModuleRatio));모듈
+    (setq a0 (/ (* pi PressAngle) 180));압력각
+    (setq Z (float (abs InvoluteTeeth)));잇수
+
+    (if (= ModificationRatio 0) (setq X Modification) (setq X (/ (* Modification ModificationRatio) m)));전위
+
+    (if (< InvoluteTeeth 0)
+      (progn;내접 기어 일 때 변수들을 적절히 바꿔주는 부분입니다.
+        (if (= UpperRatio 0) (setq D Upper) (setq D (/ (* Upper UpperRatio) m)));치형의 끝쪽으로 증가
+        (if (= DownerRatio 0) (setq A Downer) (setq A (/ (* Downer DownerRatio) m)));치형의 뿌리 쪽으로 증가
+
+        (if (= BacklashRatio 0) (setq B (* -1 Backlash)) (setq B (* -1 (/ (* Backlash BacklashRatio) m))));백래시
+
+	(if (= InvoluteChangeRadius 1)
+	  (progn
+	    (if (= CutRadiusRatio 0) (setq E CutRadius) (setq E (/ (* CutRadius CutRadiusRatio) m)));공구 날끝 둥글기
+	    (if (= EndRadiusRatio 0) (setq C EndRadius) (setq C (/ (* EndRadius EndRadiusRatio) m)));치형 끝 모깎기
+	  )
+	  (progn
+	    (if (= CutRadiusRatio 0) (setq C CutRadius) (setq C (/ (* CutRadius CutRadiusRatio) m)));공구 날끝 둥글기
+	    (if (= EndRadiusRatio 0) (setq E EndRadius) (setq E (/ (* EndRadius EndRadiusRatio) m)));치형 끝 모깎기
+	  )
+	)
+      );End progn
+      (progn;인볼류트 곡선의 일부분을 사용하여 기어를 그릴 때 설정하는 변수입니다.
+        (if (= UpperRatio 0) (setq A Upper) (setq A (/ (* Upper UpperRatio) m)));치형의 위쪽으로 증가
+        (if (= DownerRatio 0) (setq D Downer) (setq D (/ (* Downer DownerRatio) m)));치형의 아래로 증가
+
+        (if (= BacklashRatio 0) (setq B Backlash) (setq B (/ (* Backlash BacklashRatio) m)));백래시
+
+        (if (= CutRadiusRatio 0) (setq C CutRadius) (setq C (/ (* CutRadius CutRadiusRatio) m)));공구 날끝 둥글기
+        (if (= EndRadiusRatio 0) (setq E EndRadius) (setq E (/ (* EndRadius EndRadiusRatio) m)));치형 끝 모깎기
+      );End progn
+    );End cond
+
+    (if (<= (+ A D) 0) (if (= OsLanguage "KOR") (princ "기어의 어덴덤과 디덴덤 오류입니다.") (princ "Error addendum and dedendum of gear")))
+
+    (setq am (/ pi Z))
+
+    (setq ais (- (+ a0 (/ pi (* 2 Z)) (/ B (* Z (cos a0))))
+	         (/ (* (+ 1 (/ (* 2 X) Z)) (sin a0)) (cos a0))))
+
+    (setq buffer (- (expt (/ (+ Z (* 2 (- (+ X A) E))) (* Z (cos a0))) 2) 1))
+    (if (< buffer 0)
+      (progn (setq NoI -1) (setq cie 0.0) (setq E 0.0));-전위로 인벌류트 곡선이 없을 때
+      (progn
+        (setq cie (+ (/ (* 2 E) (* Z (cos a0))) (sqrt buffer)))
+
+        (if (<= am (- (+ ais cie) (atan cie)));이끝원호를 작도 하지 못할 때 cie를 다시 구합니다.
+	  (progn;이 끝 원호도 없고 이 끝 모깎기 호도 없을 때
+	    (setq NoE 2)
+
+	    (setq counter 0)
+	    (while (<= counter 0)
+	      (setq f0x (+ (- (atan cie 1.0) cie ais) am))
+	      (setq f1x (- (/ 1 (+ 1 (expt cie 2))) 1))
+	      (setq cie (- cie (/ f0x f1x)))
+	      (setq counter (1- counter))
+	      (if (or (< counter -50) (< (abs f0x) 2e-15)) (setq counter (abs counter)))
+	    )
+	    (setq E 0.0)
+	  )
+	  (progn
+	    (setq ae (- (+ ais cie) (atan (sqrt buffer))))
+	    (if (>= ae am)
+	      (progn;이 끝 원호가 점이거나 이 끝 모깎기 호가 주어진 값보다 작을 때
+	        (setq NoE 1)
+
+	        (setq ae (+ (- (* 2 am) ais cie) (atan cie 1.0)))
+	        (setq xe (+ x0 (* 0.5 m Z (cos a0) (sqrt (+ 1 (expt cie 2))) (cos ae))))
+	        (setq ye (+ y0 (* 0.5 m Z (cos a0) (sqrt (+ 1 (expt cie 2))) (sin ae))))
+	      )
+	      (progn;이 끝 원호가 정상일 때
+	        (setq NoE 0)
+
+	        (setq xe (+ x0 (* m (+ (/ Z 2) X A) (cos ae))))
+	        (setq ye (+ y0 (* m (+ (/ Z 2) X A) (sin ae))))
+
+	        (setq aem (- (* 2 am) ae))
+	        (setq xem (+ x0 (* m (+ (/ Z 2) X A) (cos aem))))
+	        (setq yem (+ y0 (* m (+ (/ Z 2) X A) (sin aem))))
+	      );End progn
+	    );End if
+	  );End progn
+        );End if
+      );End progn
+    );End if
+
+
+    (setq cis (+ (/ (sin a0) (cos a0))
+	         (/ (* 2 (- (+ (* C (- 1 (sin a0))) X) D)) (* Z (cos a0) (sin a0)))))
+
+    (setq ats (+ (/ (+ (* 2 (- (* C (- 1 (sin a0))) D) (sin a0)) B) (* Z (cos a0)))
+	         (/ (* -2 C (cos a0)) Z)
+	         (/ pi (* 2 Z))))
+
+    (setq xs (+ x0 (* m (+ (/ Z 2) (- X D)) (cos ats))))
+    (setq ys (+ y0 (* m (+ (/ Z 2) (- X D)) (sin ats))))
+
+    (setq xsm xs)
+    (setq ysm (- y0 (* m (+ (/ Z 2) (- X D)) (sin ats))))
+
+    ;오토캐드 오류
+    ;(rtos (- 1.25 1.05) 2 20)를 계산하면 0.2가 안되는 오류로 같다, 다르다를 대소 비교로로 바꿈
+    (if (< (abs (- D X C)) 2e-15); ***캐드 오류로 대소 비교로 바꿈***
+      (if (> C 0)
+        (setq NoTr 1); D-X=C이고 C/=0일 때 trovolute곡선부분을 원호로 그립니다.
+        (setq NoTr 2); D-X=C이고 C=0일 때 trovolute곡선부분은 그리지 않습니다.
+      )
+    )
+
+    (setq cts 0.0)
+
+    (cond
+      ((= ats 0) (setq NoR 1));이 뿌리 원호가 점일 때.
+      ((< ats 0);이뿌리 원호를 작도 하지 못할 때 cts를 다시 구합니다.
+       (setq NoR 2)
+
+       (setq buffer (- (expt C 2) (expt (* (+ (/ Z 2) (* -1 D) X C) (sin ats)) 2)))
+       (if (and (= NoTr 1) (< buffer 0)) (setq NoTr 2));트로벌류트 곡선이 원호이고 이 뿌리 곡선이 없을 때
+       (if (= NoTr 1)
+         (progn;이 뿌리 원호가 없고 트로벌류트 곡선이 없을 때
+	   (setq xsm (+ x0 (* m (+ (/ Z 2) (* -1 D) X C) (cos ats))));원호의 중심점인 X좌표
+	   (setq ysm (+ y0 (* m (+ (/ Z 2) (* -1 D) X C) (sin ats))));원호의 중심점인 Y좌표
+
+	   (setq xs (+ x0 (* m (- (* (+ (/ Z 2) (* -1 D) X C) (cos ats)) (sqrt buffer)))))
+	   (setq ys y0)
+         )
+         (progn;이 뿌리 곡선이 없고 트로벌류트 곡선이 있을 때
+	   (setq counter 0)
+	   (while (<= counter 0)
+	     (setq f0x (- (* (+ (/ Z 2) X (* -1 D) C) (sin (+ cts ats)))
+			  (* (/ Z 2) cts (cos (+ cts ats)))
+			  (* C (sin (+ (atan (/ (* Z cts) (* 2 (- D X C)))) cts ats)))))
+	     (setq f1x (+ (* -1 (- D X C) (cos (+ cts ats)))
+			  (* (/ Z 2) cts (sin (+ cts ats)))
+			  (* -1 (+ 1 (/ (* 2 Z (- D X C)) (+ (expt (* Z cts) 2) (expt (* 2 (- D X C)) 2))))
+			     C (cos (+ (atan (/ (* Z cts) (* 2 (- D X C)))) cts ats)))))
+	     (setq cts (- cts (/ f0x f1x)))
+	     (setq counter (1- counter))
+	     (if (or (< counter -50) (< (abs f0x) 2e-15)) (setq counter (abs counter)))
+	   );End while
+         );End progn
+       );End if
+      );
+    );End cond
+
+    (setq cte (- (/ (* 2 C (cos a0)) Z)
+	         (/ (* 2 (- D X (* C (- 1 (sin a0)))) (cos a0)) (* Z (sin a0)))))
+
+    (if (< cis 0);언더컷이 발생하면 cis, cte를 다시 구합니다.
+      (progn
+        (setq cis 1.0)
+        (setq cte -1.0)
+
+        (setq counter 0)
+        (while (<= counter 0)
+	  (setq f0xi (* 0.5 m Z (cos a0) (+ (cos (+ ais cis)) (* cis (sin (+ ais cis))))))
+	  (setq f0yi (* 0.5 m Z (cos a0) (- (sin (+ ais cis)) (* cis (cos (+ ais cis))))))
+	
+	  (setq f0xt (* m (+ (* (+ (/ Z 2) X (* -1 D) C) (cos (+ cte ats)))
+			     (* 0.5 Z cte (sin (+ cte ats)))
+			     (* -1 C (cos (+ (atan (/ (* 0.5 Z cte) (- D X C))) cte ats))))))
+	  (setq f0yt (* m (+ (* (+ (/ Z 2) X (* -1 D) C) (sin (+ cte ats)))
+			     (* -0.5 Z cte (cos (+ cte ats)))
+			     (* -1 C (sin (+ (atan (/ (* 0.5 Z cte) (- D X C))) cte ats))))))
+
+	  (setq f1xi (* -0.5 m Z cis (cos a0) (cos (+ ais cis))))
+	  (setq f1yi (* -0.5 m Z cis (cos a0) (sin (+ ais cis))))
+
+	  (setq f1xt (* m (+ (* (- D X C) (sin (+ cte ats)))
+			     (* 0.5 Z cte (cos (+ cte ats)))
+			     (* (+ 1 (/ (* 2 Z (- D X C)) (+ (expt (* Z cte) 2) (* 4 (expt (- D X C) 2)))))
+			        C (sin (+ (atan (/ (* 0.5 Z cte) (- D X C))) cte ats))))))
+	  (setq f1yt (* m (+ (* -1 (- D X C) (cos (+ cte ats)))
+			     (* 0.5 Z cte (sin (+ cte ats)))
+			     (* -1 (+ 1 (/ (* 2 Z (- D X C)) (+ (expt (* Z cte) 2) (* 4 (expt (- D X C) 2)))))
+			        C (cos (+ (atan (/ (* 0.5 Z cte) (- D X C))) cte ats))))))
+
+	  (setq cis (- cis (/ (- (* (- f0xt f0xi) f1yt) (* (- f0yt f0yi) f1xt)) (- (* f1xi f1yt) (* f1xt f1yi)))))
+	  (setq cte (- cte (/ (- (* (- f0yt f0yi) f1xi) (* (- f0xt f0xi) f1yi)) (- (* f1xi f1yt) (* f1xt f1yi)))))
+
+	  (setq counter (1- counter))
+	  (if (or (< counter -50) (and (< (abs (- f0xt f0xi)) 2e-15) (< (abs (- f0yt f0yi)) 2e-15))) (setq counter (abs counter)))
+        )
+        (setq UnderCut (- 1000.5 (/ (* (- cie cis) Z (cos a0) (sin a0) 1000)
+				    (+ (* 2 (- D X (* C (- 1 (sin a0))))) (* cie Z (cos a0) (sin a0)) (* -1 Z (expt (sin a0) 2))))))
+        (setq UnderCut (/ (float (fix UnderCut)) 10))
+      )
+      (setq UnderCut 0.0)
+    )
+
+    (if (>= cis cie);인벌류트 곡선을 그리지 못할 때 cte를 다시 구합니다.
+      (if (or (< X 0) (= NoI -1))
+        (progn;-전위로 인벌류트 곡선을 그릴 수 없을 때
+	  (setq NoI -1)
+	  (setq E 0.0)
+
+	  (setq counter 0)
+	  (while (<= counter 0)
+	    (setq f0x (- (expt (+ (/ Z 2) X A) 2)
+		         (expt (+ (* 0.5 Z cte) (/ (* C Z cte) (sqrt (+ (expt (* Z cte) 2) (expt (* 2 (- D X C)) 2))))) 2)
+		         (expt (+ (/ Z 2) X (* -1 D) C (/ (* -2 C (- D X C)) (sqrt (+ (expt (* Z cte) 2) (expt (* 2 (- D X C)) 2))))) 2)))
+	    (setq f1x (- (* -1 (- (/ Z 2) (/ (* -1 C Z) (sqrt (+ (expt (* Z cte) 2) (expt (* 2 (- D X C)) 2))))
+				  (/ (* C (expt cte 2) (expt Z 3)) (expt (sqrt (+ (expt (* Z cte) 2) (expt (* 2 (- D X C)) 2))) 3)))
+			    (+ (* Z cte) (/ (* Z cte) (sqrt (+ (expt (* Z cte) 2) (expt (* 2 (- D X C)) 2))))))
+		         (/ (* 4 C cte (expt Z 2) (- D X C)
+			       (- (/ Z 2) (- D X C)
+				  (/ (* 2 C (- D X C)) (sqrt (+ (expt (* Z cte) 2) (expt (* 2 (- D X C)) 2))))))
+			    (expt (sqrt (+ (expt (* Z cte) 2) (expt (* 2 (- D X C)) 2))) 3))))
+	    (setq cte (- cte (/ f0x f1x)))
+	    (setq counter (1- counter))
+	    (if (or (< counter -50) (< (abs f0x) 2e-15)) (setq counter (abs counter)))
+	  );End while
+        )
+        (progn;+전위로 인벌류트 곡선을 그릴 수 없을 때
+	  (setq NoI 1)
+	  (setq E 0.0)
+
+	  (setq cte (/ cte 64))
+	  (setq counter 0)
+	  (while (<= counter 0)
+	    (setq f0x (- (* Z cte)
+		         (/ (* 2 C Z cte) (sqrt (+ (expt (* Z cte) 2) (expt (* 2 (+ (- X D) C)) 2))))
+		         (* (- (+ Z (* 2 (+ (- X D) C))) (/ (* 4 C (+ (- X D) C)) (sqrt (+ (expt (* Z cte) 2) (expt (* 2 (+ (- X D) C)) 2)))))
+			    (/ (sin (- (+ cte ats) am)) (cos (- (+ cte ats) am))))))
+	    (setq f1x (- (/ (- (* 2 C (expt cte 2) (expt Z 3)) (* 4 C cte (+ (- X D) C) (expt Z 2) (/ (sin (- (+ cte ats) am)) (cos (- (+ cte ats) am)))))
+			    (sqrt (expt (+ (expt (* Z cte) 2) (expt (* 2 (+ (- X D) C)) 2)) 3)))
+		         (/ (- (* 2 C Z) (* 4 C (+ (- X D) C)))
+			    (sqrt (+ (expt (* Z cte) 2) (expt (* 2 (+ (- X D) C)) 2))))
+		         (* 2 (+ (- X D) C))
+		         (* (- Z (* -2 (+ (- X D) C)) (/ (* 4 C (+ (- X D) C)) (sqrt (+ (expt (* Z cte) 2) (expt (* 2 (+ (- X D) C)) 2)))))
+			    (expt (/ (sin (- (+ cte ats) am)) (cos (- (+ cte ats) am))) 2))))
+	    (setq cte (- cte (/ f0x f1x)))
+	    (setq counter (1- counter))
+	    (if (or (< counter -50) (< (abs f0x) 2e-15)) (setq counter (abs counter)))
+	  );End while
+        );End progn
+      );End if
+    );End if
+  
+    ;-백래쉬나 압력각이 커서 트로벌류트 곡선이 없을 때(NoTr=-1)
+    (if (> (- (atan cis) cis ais) 0); => 인벌류트와 트로벌류트 곡선이 만나는 점의 각도가 0 보다 작으면 트로벌류트 곡선이 없음.
+      (progn
+        (setq NoTr -1)
+        (setq NoR 2)
+
+        (setq counter 0)
+        (while (<= counter 0)
+	  (setq f0x (- (atan cis) cis ais))
+	  (setq f1x (- (/ 1 (+ 1 (expt cis 2))) 1))
+	  (setq cis (- cis (/ f0x f1x)))
+	  (setq counter (1- counter))
+	  (if (or (< counter -50) (< (abs f0x) 2e-15)) (setq counter (abs counter)))
+         )
+      )
+    )
+
+    (setq Nt (fix (+ (/ (* SeriesNumber (abs cte)) (+ (- cie cis) (abs cte))) 0.5)))
+    (if (< Nt 1) (setq Nt 1)) (if (>= Nt SeriesNumber) (setq Nt (- SeriesNumber 1)))
+    (setq Ni (- SeriesNumber Nt))
+  )
+
+
+
+
+
+
+
+  ;인벌류트(involute) 치형의 보조선을 그리는 서브프로그램.
+  (defun involute_gear_extension_draw (/)
+
+    ;Center line 레이어에 보조선을 그립니다.
+    (command "layer" "m" "Center line" "c" "6" "" "")
+
+    (setq buffer (* (+ (/ Z 2) A X 0.5) m))
+    (command "line" (list (- x0 buffer) y0) (list (+ x0 buffer) y0) "");X축 중심선
+    (command "line" (list x0 (- y0 buffer)) (list x0 (+ y0 buffer)) "");Y축 중심선
+
+    (command "circle" CenterPoint (/ (* m Z) 2)); 피치원
+    (if (/= X 0) (progn (command "circle" CenterPoint (* m (+ (/ Z 2) X)))
+		   (command "change" (entlast) "" "P" "C" "1" "LT" "bylayer" "")));전위원
+    (if (> NoR 1) (progn (command "circle" CenterPoint (* m (- (+ (/ Z 2) X) D)))
+		    (command "change" (entlast) "" "P" "C" "7" "LT" "bylayer" "")));이뿌리원
+    (if (> NoE 0) (progn (command "circle" CenterPoint (* m (+ (/ Z 2) X A)))
+		    (command "change" (entlast) "" "P" "C" "4""LT" "bylayer" "")));이끝원
+
+    ;Explanatory note 레이어에 문자를 적습니다.
+    (command "layer" "m" "Explanatory note" "c" "7" "" "")
+
+    (setq buffer (* m Z 0.02)) (if (> buffer (* m 0.5)) (setq buffer (* m 0.5)))
+    (if (/= NoI nil)
+      (command "text" (list (+ x0 (* buffer 0.1)) (+ y0 (* buffer 0.3))) buffer "0"
+	       (strcat (if (= OsLanguage "KOR") "인벌류트 곡선 없음" "No involute curve"))
+      )
+    )
+    (command "text" (list (+ x0 (* buffer 0.1)) (- y0 (* buffer 1.3))) buffer "0"
+	     (strcat (if (= OsLanguage "KOR") "모듈:" "Module:")
+		     (rtos InvoluteModule) (gear_unit_display InvoluteModuleRatio)
+		     (if (= OsLanguage "KOR") "  잇수:" "  Teeth:") (itoa InvoluteTeeth)))
+    (if (/= B 0)
+      (command "text" (list (+ x0 (* buffer 0.1)) (- y0 (* buffer 2.8))) buffer "0"
+	       (strcat (if (= OsLanguage "KOR") "백래쉬: " "Backlash:")
+		       (rtos (if (= BacklashRatio 0) (* InvoluteModule Backlash) Backlash))
+		       (if (= BacklashRatio 0) (gear_unit_display InvoluteModuleRatio) (gear_unit_display BacklashRatio))))
+    )
+    (if (and (= B 0) (/= UnderCut 0))
+      (command "text" (list (+ x0 (* buffer 0.1)) (- y0 (* buffer 2.8))) buffer "0"
+	       (strcat (if (= OsLanguage "KOR") "언더컷: " "UnderCut:") (rtos UnderCut) "%"))
+    )
+    (if (and (/= B 0) (/= UnderCut 0))
+      (command "text" (list (+ x0 (* buffer 0.1)) (- y0 (* buffer 4.3))) buffer "0"
+	       (strcat (if (= OsLanguage "KOR") "언더컷: " "UnderCut:") (rtos UnderCut) "%"))
+    )
+  )
+
+
+
+
+
+
+
+
+  ;인벌류트(involute) 치형을 작도하는 서브프로그램.
+  (defun involute_gear_tooth_form_draw (/)
+
+    (setq GearLine nil)
+    (setq RLine nil)
+    (setq ELine nil)
+
+    ;trovolute곡선을 그립니다.
+    (if (= NoTr nil)
+      (progn
+        (setq buffer (fix (abs (1+ (/ 10 (- D X C))))))
+        (setq counter Nt)
+
+        (while (<= 0 counter)
+	  (setq step (+ (/ (* (- cte cts) (+ (* 2 buffer) 1 counter) counter) (* (+ (* 2 buffer) Nt 1) Nt)) cts))
+
+	  (setq cs (atan (/ (* 0.5 Z step) (- D X C))))
+
+	  (setq xd (+ x0 (* m (+ (* (+ (- (/ Z 2) D) X C) (cos (+ step ats)))
+			         (* 0.5 Z step (sin (+ step ats)))
+			         (* -1 C (cos (+ cs step ats)))))))
+	  (setq yd (+ y0 (* m (- (* (+ (- (/ Z 2) D) X C) (sin (+ step ats)))
+			         (* 0.5 Z step (cos (+ step ats)))
+			         (* C (sin (+ cs step ats)))))))
+	  (if (= counter Nt)
+	    (progn
+	      (if (= NoI -1)
+	        (progn
+		  (setq NoE 0)
+		  (setq aem (- (* 2 am) (atan (/ (- yd y0) (- xd x0)))))
+		  (cond
+		    ((< aem am)
+		     (setq xem xd) (setq yem yd)
+		     (setq xe (+ x0 (* m (+ (/ Z 2) X A) (cos aem))))
+		     (setq ye (+ y0 (* m (+ (/ Z 2) X A) (sin aem))))
+		    )
+		    ((> aem am)
+		     (setq xe xd) (setq ye yd)
+		     (setq xem (+ x0 (* m (+ (/ Z 2) X A) (cos aem))))
+		     (setq yem (+ y0 (* m (+ (/ Z 2) X A) (sin aem))))
+		    )
+		    (T (setq NoE 2))
+		  );End cond
+	        );End progn
+	      );End if
+	      (command "line" (polar (list xd yd) (+ ats cte cs (/ pi 2)) m) (list xd yd) "")
+	      (setq BLine (entlast))
+	    )
+	    (progn
+	      (command "arc" "" (list xd yd))
+	      (if (= GearLine nil)
+	        (progn (command "pedit" (entlast) "y" "") (setq GearLine (entlast)))
+	        (command "pedit" GearLine "j" (entlast) "" "")
+	      )
+	    )
+	  )
+	  (setq counter (1- counter))
+        )
+        (command "erase" BLine "")
+      )
+    )
+
+
+    ;이뿌리 원호를 그립니다.
+    (if (and (= NoR nil) (not (or (and (= x0 xsm) (= y0 ysm)) (and (= x0 xs) (= y0 ys)) (and (= xs xsm) (= ys ysm)))))
+      (progn
+        (command "arc" "C" CenterPoint (list xsm ysm) (list xs ys))
+        (command "pedit" (entlast) "y" "")
+        (setq RLine (entlast))
+      )
+    )
+
+
+    ;involute곡선을 그립니다.
+    (if (= NoI nil)
+      (progn
+        (setq buffer (fix (+ (/ (* cis Ni) (- cie cis)) 0.5)))
+        (setq counter 0)
+
+        (while (>= Ni counter)
+	  (setq step (+ (/ (* (- cie cis) (+ (* 2 buffer) 1 counter) counter) (* (+ (* 2 buffer) Ni 1) Ni)) cis))
+
+	  (setq xd (+ x0 (* 0.5 m Z (cos a0) (+ (cos (+ ais step)) (* step (sin (+ ais step)))))))
+	  (setq yd (+ y0 (* 0.5 m Z (cos a0) (- (sin (+ ais step)) (* step (cos (+ ais step)))))))
+
+	  (if (= counter 0)
+	    (progn
+	      (cond
+	        ((and (= NoTr 1) (/= NoR 2));involute곡선이 원호이면서 이 뿌리원까지 그리지 못할 때
+	         (command "arc" (list xd yd) "e" (list xs ys) "r" (* m C))
+	         (command "pedit" (entlast) "y" "")
+	         (setq GearLine (entlast))
+	        )
+	        ((= NoTr 1);involute곡선이 원호이고 이 뿌리 원호가 그려질 때
+	         (command "arc" (list xd yd) "c" (list xsm ysm) (list xs ys))
+	         (command "pedit" (entlast) "y" "")
+	         (setq GearLine (entlast))
+	        )
+	      )
+	      (command "line" (polar (list xd yd) (+ ais cis) (* -1 m)) (list xd yd) "")
+	      (setq BLine (entlast))
+	    )
+	    (progn
+	      (command "arc" "" (list xd yd))
+	      (if (= GearLine nil)
+	        (progn (command "pedit" (entlast) "y" "") (setq GearLine (entlast)))
+	        (command "pedit" GearLine "j" (entlast) "" "")
+	      )
+	    )
+	  )
+	  (setq counter (1+ counter))
+        )
+        (command "erase" BLine "")
+      )
+    )  
+
+
+    ;이끝 모깎기
+    (if (/= E 0)
+      (progn
+        (command "arc" "" (list xe ye))
+        (cond
+	  ((= NoE 0)
+	   (command "pedit" (entlast) "y" "")
+	   (command "pedit" GearLine "j" (entlast) "" "")
+	  )
+	  ((= NoE 1)
+	   (command "pedit" (entlast) "y" "")
+	   (setq ELine (entlast))
+	  )
+        )
+      )
+    )
+
+
+    ;이끝 원호를 그립니다.
+    (if (= NoE 0)
+      (progn
+        (command "arc" "C" CenterPoint (list xe ye) (list xem yem))
+        (command "pedit" (entlast) "y" "")
+        (setq ELine (entlast))
+      )
+    )
+
+
+    ;치형을 대칭하고 폴리라인으로 연결합니다.
+    (command "mirror" GearLine "" CenterPoint (polar CenterPoint am m) "")
+    (if (/= ELine nil) (command "pedit" GearLine "j" ELine "" ""))
+    (command "pedit" GearLine "j" (entlast) "" "")
+    (if (/= RLine nil) (command "pedit" GearLine "j" RLine "" ""))
+
+
+
+    ;치형을 잇수만큼 배열합니다.
+    (if (> Z 1) (command "array" GearLine "" "p" CenterPoint (fix Z) "360" ""))
+
+
+    ;배열을 통해 만들어진 치형을 모두 찾습니다.
+    (setq DrawSum (ssadd))
+
+    (setq BLine GearLine)
+    (setq counter 0)
+    (while (<= counter 0)
+      (setq DrawSum (ssadd BLine DrawSum))
+      (setq BLine (entnext BLine))
+      (setq counter (1- counter))
+      (if (= BLine nil) (setq counter (abs counter)))
+    )
+
+
+    ;치형을 모두 연결합니다.
+    (if (> Z 1) (command "pedit" GearLine "j" DrawSum "" ""))
+    (command "pedit" GearLine "l" "on" "")
+  )
+
+
+
+
+
+
+
+
+
+
+
+
+  ;인벌류트(involute) 랙(rack)치형 작도를 위해 초기값을 계산하는 서브프로그램.
+  (defun involute_rack_base_value_calculation (/)
+    (setq m (* InvoluteModule InvoluteModuleRatio));모듈
+    (setq a0 (/ (* pi PressAngle) 180));압력각
+    (setq Z (float (abs rack)));잇수
+
+    (if (= BacklashRatio 0) (setq B (* -1 Backlash)) (setq B (* -1 (/ (* Backlash BacklashRatio) m))));백래시
+
+    (if (= UpperRatio 0) (setq A Upper) (setq A (/ (* Upper UpperRatio) m)));치형의 위쪽으로 증가
+    (if (= DownerRatio 0) (setq D Downer) (setq D (/ (* Downer DownerRatio) m)));치형의 아래로 증가
+  
+    (if (= CutRadiusRatio 0) (setq C CutRadius) (setq C (/ (* CutRadius CutRadiusRatio) m)));공구 날끝 둥글기
+    (if (= EndRadiusRatio 0) (setq E EndRadius) (setq E (/ (* EndRadius EndRadiusRatio) m)));치형 끝 모깎기
+
+    ;s:가장 아래쪽, sm:경사면 아래쪽, em:경사면 위쪽, e:가장 위쪽
+    (setq ys (- y0 (* m D)))
+    (setq ysm (- y0 (* m (+ D (* C (- (sin a0) 1))))))
+    (setq ye (+ y0 (* m A)))
+    (setq yem (+ y0 (* m (+ A (* E (- (sin a0) 1))))))
+
+    (setq xs (* m (+ (/ pi 4) (* (- D C) (/ (sin a0) (cos a0))) (/ C (cos a0)) (/ (* 0.5 B) (cos a0)))))
+    (setq xsm (* m (+ (/ pi 4) (* (- D C) (/ (sin a0) (cos a0))) (/ (* C (expt (sin a0) 2)) (cos a0)) (/ (* 0.5 B) (cos a0)))))
+    (setq xe (* m (- (/ pi 4) (* (- A E) (/ (sin a0) (cos a0))) (/ E (cos a0)) (/ (* -0.5 B) (cos a0)))))
+    (setq xem (* m (- (/ pi 4) (* (- A E) (/ (sin a0) (cos a0))) (/ (* E (expt (sin a0) 2)) (cos a0)) (/ (* -0.5 B) (cos a0)))))
+
+    (if (>= xsm (* 0.5 m pi))
+      (progn
+        (setq NoR 2)
+        (setq ysm (+ ysm (/ (* (- xsm (* 0.5 m pi)) (cos a0)) (sin a0))))
+        (setq xsm (* 0.5 m pi))
+      )
+      (if (>= xs (* 0.5 m pi)) (setq NoR 1) (setq NoR 0))
+    )
+    (if (<= xem 0)
+      (progn
+        (setq NoE 2)
+        (setq yem (+ yem (/ (* xem (cos a0)) (sin a0))))
+        (setq xem 0.0)
+      )
+      (if (<= xe 0) (setq NoE 1) (setq NoE 0))
+    )
+  )
+
+
+
+
+
+  ;인벌류트(involute) 랙(rack)치형의 보조선을 그리는 서브프로그램.
+  (defun involute_rack_extension_draw (/)
+    (command "layer" "m" "Center line" "c" "6" "" "")
+
+    (setq buffer (* m (+ D A) 0.7))
+    (command "line" (list (- x0 buffer) y0) (list (+ x0 buffer (* pi m (- Z 1))) y0) "");X축 중심선
+    (if (< rack 0) (command "rotate" (entlast) "" CenterPoint "90"))
+    (command "line" (list x0 (+ y0 buffer)) (list x0 (- y0 buffer)) "");Y축 중심선
+    (if (< rack 0) (command "rotate" (entlast) "" CenterPoint "90"))
+
+    (if (/= NoE 0)
+      (progn
+        (command "line" (list (- x0 buffer) (+ y0 (* m A))) (list (+ x0 buffer (* pi m (- Z 1))) (+ y0 (* m A))) "");이 끝선
+        (command "change" (entlast) "" "P" "C" "4" "LT" "bylayer" "")
+        (if (< rack 0) (command "rotate" (entlast) "" CenterPoint "90"))
+      )
+    )
+    (if (/= NoR 0)
+      (progn
+        (command "line" (list (- x0 buffer) (- y0 (* m D))) (list (+ x0 buffer (* pi m (- Z 1))) (- y0 (* m D))) "");이 아래선
+        (command "change" (entlast) "" "P" "C" "7" "LT" "bylayer" "")
+        (if (< rack 0) (command "rotate" (entlast) "" CenterPoint "90"))
+      )
+    )
+
+    (command "layer" "m" "Explanatory note" "c" "7" "" "")
+    (command "text" (list x0 (- y0 buffer (* m 0.5))) (* m 0.3) "0"
+	     (strcat (if (= OsLanguage "KOR") "모듈:" "Module:")
+		     (rtos InvoluteModule) (gear_unit_display InvoluteModuleRatio)))
+    (if (/= B 0)
+      (command "text" (list x0 (- y0 buffer (* m 0.9))) (* m 0.3) "0"
+	       (strcat (if (= OsLanguage "KOR") "백래쉬: " "Backlash:")
+		       (rtos (if (= BacklashRatio 0) (* InvoluteModule Backlash) Backlash))
+		       (if (= BacklashRatio 0) (gear_unit_display InvoluteModuleRatio) (gear_unit_display BacklashRatio))))
+    )
+  )
+
+
+
+
+
+
+  ;인벌류트(involute) 랙(rack)치형을 작도하는 서브프로그램.
+  (defun involute_rack_tooth_form_draw (/)
+    (setq GearLine nil)
+
+    (setq counter 0)
+    (while (> Z counter)
+      (if (>= counter 1)
+        (progn
+	  (if (= NoR 0)
+	    (progn
+	      (command "line" (list (+ x0 xs (* pi m (- counter 1))) ys) (list (- x0 xs (* -1 pi m counter)) ys) "")
+	      (command "pedit" GearLine "j" (entlast) "" "")
+
+	      (if (/= C 0)
+	        (progn
+		  (command "arc" "" (list (- x0 xsm (* -1 pi m counter)) ysm))
+		  (command "pedit" GearLine "j" (entlast) "" "")
+	        )
+	      )
+	    )
+          )
+
+          (if (> Z 2);캐디안에서 이 수가 30개가 넘는 배열(array)은 오류(배열 간격 오차)가 생기며 if문을 지우고 아래 랙치형 연결 루틴을 지우면 됩니다.
+	    (progn
+	      (command "array" GearLine "" "R" "1" (atoi (rtos (1- Z))) (* pi m))
+	      (setq counter (1- Z))
+	    )
+          )
+        )
+      )
+
+      (command "line" (list (- x0 xsm (* -1 pi m counter)) ysm) (list (- x0 xem (* -1 pi m counter)) yem) "")
+      (if (= GearLine nil)
+        (progn (command "pedit" (entlast) "y" "") (setq GearLine (entlast)))
+        (command "pedit" GearLine "j" (entlast) "" "")
+      )
+
+      (if (and (/= E 0) (/= NoE 2))
+        (if (= NoE 1)
+	  (progn
+	    (command "arc" "" (list (+ x0 xem (* pi m counter)) yem))
+	    (command "pedit" GearLine "j" (entlast) "" "")
+	  )
+	  (progn
+	    (command "arc" "" (list (- x0 xe (* -1 pi m counter)) ye))
+	    (command "pedit" GearLine "j" (entlast) "" "")
+	  )
+        )
+      )
+
+      (if (= NoE 0)
+        (progn
+	  (command "line" (list (- x0 xe (* -1 pi m counter)) ye) (list (+ x0 xe (* pi m counter)) ye) "")
+	  (command "pedit" GearLine "j" (entlast) "" "")
+
+	  (if (/= E 0)
+	    (progn
+	      (command "arc" "" (list (+ x0 xem (* pi m counter)) yem))
+	      (command "pedit" GearLine "j" (entlast) "" "")
+	    )
+	  )
+        )
+      )
+
+      (command "line" (list (+ x0 xem (* pi m counter)) yem) (list (+ x0 xsm (* pi m counter)) ysm) "")
+      (command "pedit" GearLine "j" (entlast) "" "")
+
+      (if (and (/= C 0) (/= NoR 2) (/= Z (+ 1 counter)))
+        (if (= NoR 1)
+	  (progn
+	    (command "arc" "" (list (- x0 xsm (* -1 pi m (+ counter 1))) ysm))
+	    (command "pedit" GearLine "j" (entlast) "" "")
+	  )
+	  (progn
+	    (command "arc" "" (list (+ x0 xs (* pi m counter)) ys))
+	    (command "pedit" GearLine "j" (entlast) "" "")
+	  )
+        )
+      )
+
+      (setq counter (1+ counter))
+    )
+
+    ;랙치형을 연결합니다.
+    (setq DrawSum (ssadd))
+    (cond
+      ((= Z 2) (command "pedit" GearLine "j" (entlast) "" ""))
+      ((> Z 2)
+       (setq BLine GearLine)
+       (setq counter 0)
+       (while (<= counter 0)
+         (setq DrawSum (ssadd BLine DrawSum))
+         (setq BLine (entnext BLine))
+         (setq counter (1- counter))
+         (if (= BLine nil) (setq counter (abs counter)))
+       )
+       (command "pedit" GearLine "j" DrawSum "" "")
+      )
+    )
+
+    ;치형을 하나의 선으로 설정합니다.
+    (command "pedit" GearLine "l" "on" "")
+
+    (if (< rack 0)
+      (command "rotate" GearLine "" CenterPoint "90")
+    )
+  )
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ;부분사이클로이드(part cycloid) 치형의 설정값을 변경하는 서브 프로그램.
+  (defun partcycloid_gear_value_item_setting (/)
+    (if (/= KeyCounter 0) (princ KeyNumber))
+
+    (setq buffer (atof KeyNumber))
+
+
+    (setq KeyNumber nil)
+    (setq KeyUnit nil)
+  )
+
+
+
+
+
+  ;일부분사이클로이드(part cycloid) 치형 설정값 표시 서브 프로그램.
+  (defun partcycloid_gear_item_display (/)
+    (if (= KeyItem "V")
+      (progn
+        (princ "\n") (princ GearType)
+        (princ ":S") (princ SeriesNumber)
+        (setq KeyItem "Blank")
+      )
+    )
+
+    (common_gear_item_display);공통부분 표기 스브 프로그램
+
+    (if (= KeyItem "Blank")
+      (progn
+        (if (= OsLanguage "KOR")
+	  (princ "\n부분 사이클로이드 기어 잇수(소수는 랙) 또는 [V/S/T] <")
+	  (princ "\nPart of cycloid gear teeth(decimal is rack) or [V/S/T] <")
+        )
+        (princ PartCycloidTeeth)
+      )
+    )
+    (princ ">:")
+
+  )
+
+
+
+
+
+  ;일부분사이클로이드(part cycloid) 치형 작도를 위해 초기값을 계산하는 서브프로그램.
+  (defun partcycloid_gear_base_value_calculation (/)
+
+    (setq Z (float (abs PartCycloidTeeth)));잇수
+  
+  )
+
+
+
+
+
+
+  ;일부분사이클로이드(part cycloid) 치형의 보조선을 그리는 서브프로그램.
+  (defun partcycloid_gear_extension_draw (/)
+    ;Center line 레이어에 보조선을 그립니다.
+    (command "layer" "m" "Center line" "c" "6" "" "")
+
+    (command "circle" CenterPoint Z); 피치원
+
+    ;Explanatory note 레이어에 문자를 적습니다.
+    (command "layer" "m" "Explanatory note" "c" "7" "" "")
+
+    (command "text" (list x0 y0) Z "0"
+	     (strcat (if (= OsLanguage "KOR") "잇수:" "Teeth:") (itoa PartCycloidTeeth)))
+    
+  )
+
+
+
+
+
+  ;일부분사이클로이드(part cycloid) 치형을 작도하는 서브프로그램.
+  (defun partcycloid_gear_tooth_form_draw (/)
+
+    ;위쪽 랙(rack) Cycloid곡선을 그립니다.
+    (setq BLine nil)
+  
+  )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ;사이클로이드(cycloid) 치형 설정값 표시 서브 프로그램.
+  (defun cycloid_gear_item_display (/)
+    (if (= KeyItem "V")
+      (progn
+        (princ "\n") (princ GearType)
+        (princ ":E") (princ EpiCycloidMaking) (princ (gear_unit_display CycloidMakingRatio))
+        (princ ":H") (princ HypoCycloidMaking) (princ (gear_unit_display CycloidMakingRatio))
+        (princ ":G") (princ CycloidGap) (princ (gear_unit_display CycloidGapRatio))
+        (princ ":S") (princ SeriesNumber)
+        (setq KeyItem "Blank")
+      )
+    )
+
+    (if (= OsLanguage "KOR")
+      (cond
+        ((= KeyItem "E") (princ "\n외접 창성원 지름(내접원도 같이 바뀜) <") (princ EpiCycloidMaking) (princ (gear_unit_display CycloidMakingRatio)))
+        ((= KeyItem "H") (princ "\n내접 창성원 지름 <") (princ HypoCycloidMaking) (princ (gear_unit_display CycloidMakingRatio)))
+        ((= KeyItem "G") (princ "\n틈(단위가 없으면 비율) <") (princ CycloidGap) (princ (gear_unit_display CycloidGapRatio)))
+        (T (common_gear_item_display))
+      );End cond
+      (cond
+        ((= KeyItem "E") (princ "\nDiameter circumscribed circle(inscribed and connections.) <") (princ EpiCycloidMaking) (princ (gear_unit_display CycloidMakingRatio)))
+        ((= KeyItem "H") (princ "\nDiameter inscribed circle(a circle diameter to draw a gear.) <") (princ HypoCycloidMaking) (princ (gear_unit_display CycloidMakingRatio)))
+        ((= KeyItem "G") (princ "\nGap(If no unit, is ratio) <") (princ CycloidGap) (princ (gear_unit_display CycloidGapRatio)))
+        (T (common_gear_item_display))
+      );End cond
+    );End if
+
+    (if (= KeyItem "Blank")
+      (progn
+        (if (= OsLanguage "KOR")
+	  (princ "\n사이클로이드 기어 잇수(소수는 랙) 또는 [V/E/H/G/S/T] <")
+	  (princ "\nCycloid gear teeth(decimal is rack) or [V/E/H/G/S/T] <")
+        )
+        (princ CycloidTeeth)
+      )
+    )
+    (princ ">:")
+  )
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ;사이클로이드(cycloid) 치형의 설정값을 변경하는 서브 프로그램.
+  (defun cycloid_gear_value_item_setting (/)
+    (if (/= KeyCounter 0) (princ KeyNumber))
+
+    (setq buffer (atof KeyNumber))
+
+    (if (/= KeyUnit nil)
+      (progn
+        (cond
+	  ((= KeyItem "E")
+	   (setq CycloidMakingRatio (gear_unit_calculation KeyUnit))
+	   (if (= CycloidMakingRatio 0) (setq CycloidMakingRatio 1.0))
+	  )
+	  ((= KeyItem "H")
+	   (setq CycloidMakingRatio (gear_unit_calculation KeyUnit))
+	   (if (= CycloidMakingRatio 0) (setq CycloidMakingRatio 1.0))
+	  )
+	  ((= KeyItem "G") (setq CycloidGapRatio (gear_unit_calculation KeyUnit)))
+        )
+        (if (/= KeyCounter 0) (princ KeyUnit))
+      )
+      (cond
+        ((= KeyItem "E") (setq CycloidMakingRatio 1))
+        ((= KeyItem "H") (setq CycloidMakingRatio 1))
+        ((= KeyItem "G") (setq CycloidGapRatio 0))
+      )
+    )
+
+
+    (cond
+      ((= KeyItem "E")
+       (if (> buffer 0)
+         (progn
+	   (setq EpiCycloidMaking buffer)
+	   (setq HypoCycloidMaking EpiCycloidMaking)
+	   (setq KeyItem "Blank")
+         )
+         (if (= OsLanguage "KOR") (princ "0이나 음수는 사용 할 수 없습니다.") (princ "Zero or negative numbers are not available."))
+       )
+      )
+      ((= KeyItem "H")
+       (if (> buffer 0)
+         (progn
+	   (setq HypoCycloidMaking buffer)
+	   (setq KeyItem "Blank")
+         )
+         (if (= OsLanguage "KOR") (princ "0이나 음수는 사용 할 수 없습니다.") (princ "Zero or negative numbers are not available."))
+       )
+      )
+      ((= KeyItem "G")
+       (if (= CycloidGapRatio 0) (setq G buffer) (setq G (* buffer CycloidGapRatio)))
+       (if (or (> (abs G) (* CycloidMakingRatio EpiCycloidMaking)) (> (abs G) (* CycloidMakingRatio HypoCycloidMaking)))
+         (if (= OsLanguage "KOR") (princ "창성원 보다 큰 수는 사용 할 수 없습니다.") (princ "Greater than 'making circle diameter' are not available."))
+         (progn (setq CycloidGap buffer) (setq KeyItem "Blank"))
+       )
+      )
+      ((= KeyItem "S")
+       (if (>= (atoi KeyNumber) 2)
+         (progn (setq SeriesNumber (atoi KeyNumber)) (setq KeyItem "Blank"))
+         (if (= OsLanguage "KOR") (princ "값이 너무 작습니다.") (princ "Value is too small."))
+       )
+      )
+      (T
+       (cond
+         ((= (atof KeyNumber) 0) (if (= OsLanguage "KOR") (princ "0은 사용 할 수 없습니다.") (princ "Zero are not available.")))
+         ((< (abs (atof KeyNumber)) 1)
+	  (setq counter 1)
+	  (while (> counter 0)
+	    (if (= (substr KeyNumber counter 1) ".")
+	      (progn
+	        (if (= counter 1)
+		  (setq KeyNumber (substr KeyNumber (1+ counter) (strlen KeyNumber)))
+		  (setq KeyNumber (strcat (substr KeyNumber 1 (1- counter)) (substr KeyNumber (1+ counter) (strlen KeyNumber))))
+	        )
+	        (setq rack (atoi KeyNumber))
+	        (setq KeyItem "Exit")
+	        (setq counter (* -1 counter))
+	      );End progn
+	    );End if
+	    (setq counter (1+ counter))
+	  );End while
+         )
+         (T
+	  (setq CycloidTeeth (atoi KeyNumber))
+	  (cond
+	    ((= KeyIn "RACK") (setq rack (atoi KeyNumber)))
+	    ((= KeyIn "R") (setq rack (atoi KeyNumber)))
+	  )
+	  (setq KeyItem "Exit")
+         )
+       );End cond
+      )
+    );End cond
+
+    (setq KeyNumber nil)
+    (setq KeyUnit nil)
+  )
+
+
+
+
+
+
+
+
+
+
+  ;사이클로이드(cycloid) 치형 작도를 위해 초기값을 계산하는 서브프로그램.
+  (defun cycloid_gear_base_value_calculation (/)
+    (setq me (* EpiCycloidMaking CycloidMakingRatio));외접원 지름
+    (setq mh (* HypoCycloidMaking CycloidMakingRatio));내접원 지름
+
+    (if (= CycloidGapRatio 0) (setq G CycloidGap) (setq G (* CycloidGap CycloidGapRatio)));사이클로이드의 틈새거리를 구합니다.
+
+    (if (= rack 0) (setq Z (float (abs CycloidTeeth))) (setq Z (float (abs rack))));잇수
+
+    (setq Nh (fix (+ (/ (* (+ mh (* 0.1 SeriesNumber)) SeriesNumber) (+ (* 0.2 SeriesNumber) mh me)) 0.5))) (if (< Nh 2) (setq Nh 2))
+    (setq Ne (fix (- SeriesNumber Nh))) (if (< Ne 2) (setq Ne 2))
+
+    (setq xe (+ x0 (* 0.5 pi mh)))
+    (setq ye y0)
+  )
+
+
+
+
+  ;사이클로이드(cycloid) 치형의 보조선을 그리는 서브프로그램.
+  (defun cycloid_gear_extension_draw (/)
+
+    ;Center line 레이어에 보조선을 그립니다.
+    (command "layer" "m" "Center line" "c" "6" "" "")
+
+    (setq buffer (+ (* 0.5 (+ mh me) Z) (* 1.2 me)))
+    (command "line" (list (- x0 buffer) y0) (list (+ x0 buffer) y0) "");X축 중심선
+    (command "line" (list x0 (- y0 buffer)) (list x0 (+ y0 buffer)) "");Y축 중심선
+
+    (command "circle" CenterPoint (* 0.5 (+ mh me) Z)); 피치원
+    (command "circle" (list (+ x0 (* 0.5 (+ mh me) Z) (* -0.5 mh)) y0) (* 0.5 mh));내접 창성원
+    (command "circle" (list (+ x0 (* 0.5 (+ mh me) Z) (* 0.5 me)) y0) (* 0.5 me));외접 창성원
+
+    ;Explanatory note 레이어에 문자를 적습니다.
+    (command "layer" "m" "Explanatory note" "c" "7" "" "")
+
+    (setq buffer (if (>= Z 5) (* 0.2 (+ mh me)) (* 0.2 (/ 5 (- 11 Z)) (+ mh me))))
+    (if (= mh me)
+      (command "text" (list (+ x0 (* buffer 0.1)) (- y0 (* buffer 1.2))) buffer "0"
+	       (strcat (if (= OsLanguage "KOR") "창성원:" "Make:")
+		       (rtos EpiCycloidMaking) (gear_unit_display CycloidMakingRatio)))
+      (command "text" (list (+ x0 (* buffer 0.1)) (- y0 (* buffer 1.2))) buffer "0"
+	       (strcat (if (= OsLanguage "KOR") "창성원:" "Make:")
+		       (rtos EpiCycloidMaking) "(" (rtos HypoCycloidMaking) ")" (gear_unit_display CycloidMakingRatio)))
+    )
+    (command "text" (list (+ x0 (* buffer 0.1)) (- y0 (* buffer 2.6))) buffer "0"
+	     (strcat (if (= OsLanguage "KOR") "잇수:" "Teeth:") (itoa CycloidTeeth)))
+
+  )
+
+
+
+
+  ;사이클로이드(cycloid) 치형을 작도하는 서브프로그램.
+  (defun cycloid_gear_tooth_form_draw (/)
+
+    ;내접하는 Cycloid곡선을 그립니다.
+    (setq BLine nil)
+    (setq counter (1+ Nh))
+    (while (>= counter 0)
+      (if (> counter Nh)
+        (setq step (- (* 2 pi) (/ (* pi (+ 0 (1- Nh)) (1- Nh)) (* (+ 0 Nh) Nh))));각도를 구합니다.
+        (setq step (/ (* pi (+ 0 counter) counter) (* (+ 0 Nh) Nh)));각도를 구합니다.
+      )
+
+      (setq cs (/ (* mh step) (* (+ mh me) Z)));위성원의 중심이 위치해 있는 각도를 구합니다.
+
+      (setq xd (+ x0 (* 0.5 (- (* (+ mh me) Z) mh) (cos (* -1 cs))) (* 0.5 mh (cos (- step cs)))));위성원 위의 한 점의 X좌표
+      (setq yd (+ y0 (* 0.5 (- (* (+ mh me) Z) mh) (sin (* -1 cs))) (* 0.5 mh (sin (- step cs)))));위성원 위의 한 점의 Y좌표
+      (if (and (= Z 1) (= mh me));피치원이 창성원의 2배이면 내부 사이클로이드 곡선은 직선이 됩니다.
+        (progn
+	  (command "line" (list (+ x0 (* mh Z)) y0) (list (- x0 (* mh Z)) y0) "")
+	  (command "pedit" (entlast) "y" "")
+	  (setq RLine (entlast))
+	  (setq counter -1)
+        );End progn
+        (progn
+	  (cond
+	    ((> counter Nh) (setq xs xd) (setq ys yd))
+	    ((= counter Nh) (setq xe xd) (setq ye yd))
+	    ((= counter (1- Nh))
+	     (command "arc" (list xs ys) (list xe ye) (list xd yd))
+	     (command "pedit" (entlast) "y" "") (setq RLine (entlast))
+	    )
+	    (T
+	     (command "arc" "" (list xd yd))
+	     (if (= BLine nil)
+	       (progn
+	         (command "pedit" (entlast) "y" "")
+	         (setq BLine (entlast))
+	       )
+	       (command "pedit" BLine "j" (entlast) "" "")
+	     )
+	    )
+	  );End cond
+        );End progn
+      );End if
+
+      (setq counter (1- counter))
+    );End while
+
+    ;내접치형을 대칭하고 폴리라인으로 연결합니다.
+    (if (not (and (= Z 1) (= mh me)))
+      (progn
+        (command "mirror" BLine "" CenterPoint (list xe ye) "")
+        (command "pedit" RLine "j" BLine (entlast) "" "")
+      )
+    )
+
+
+    ;외접하는 Cycloid곡선을 그립니다.
+    (setq BLine nil)
+    (setq counter (1+ Ne))
+    (while (>= counter 0)
+      (if (> counter Ne)
+        (setq step (- (* 2 pi) (/ (* pi (+ 0 (1- Ne)) (1- Ne)) (* (+ 0 Ne) Ne))));각도를 구합니다.
+        (setq step (/ (* pi (+ 0 counter) counter) (* (+ 0 Ne) Ne)));각도를 구합니다.
+      )
+
+      (setq cs (/ (* me step) (* (+ mh me) Z)));위성원의 중심이 위치해 있는 각도를 구합니다.
+
+      (setq xd (+ x0 (* 0.5 (+ (* (+ mh me) Z) me) (cos cs)) (* 0.5 me (cos (+ pi step cs)))));위성원 위의 한 점의 X좌표
+      (setq yd (+ y0 (* 0.5 (+ (* (+ mh me) Z) me) (sin cs)) (* 0.5 me (sin (+ pi step cs)))));위성원 위의 한 점의 Y좌표
+      (cond
+        ((> counter Ne) (setq xs xd) (setq ys yd))
+        ((= counter Ne) (setq xe xd) (setq ye yd))
+        ((= counter (1- Ne))
+         (command "arc" (list xs ys) (list xe ye) (list xd yd))
+         (command "pedit" (entlast) "y" "") (setq ELine (entlast))
+        )
+        (T
+         (command "arc" "" (list xd yd))
+         (if (= BLine nil)
+	   (progn
+	     (command "pedit" (entlast) "y" "")
+	     (setq BLine (entlast))
+	   )
+	   (command "pedit" BLine "j" (entlast) "" "")
+         )
+        )
+      );End cond
+
+      (setq counter (1- counter))
+    );End while
+
+
+    ;외접치형을 대칭하고 폴리라인으로 연결합니다.
+    (command "mirror" BLine "" CenterPoint (list xe ye) "")
+    (command "pedit" ELine "j" BLine (entlast) "" "")
+
+
+    (if (= Z 1)
+      (command "pedit" RLine "j" ELine "" "")
+      (progn
+        ;치형을 잇수만큼 배열합니다.
+        (command "array" RLine ELine "" "p" CenterPoint (fix Z) "360" "")
+
+        ;배열을 통해 만들어진 치형을 모두 연결합니다.
+        (setq GearLine RLine)
+
+        (setq counter (* 2 Z))
+        (while (> counter 1)
+	  (command "pedit" GearLine "j" (entnext GearLine) "" "")
+	  (setq counter (1- counter))
+        )
+
+        ;치형을 하나의 선으로 설정합니다.
+        (command "pedit" GearLine "l" "on" "")
+      )
+    )
+
+    ;기어의 틈(GAP)을 offset명령으로 처리합니다.
+    (if (/= G 0)
+      (progn
+        (setq GearLine (entlast))
+        (if (< G 0)
+	  (command "offset" (/ G -2) GearLine (list (+ x0 (* (+ mh me) Z)) y0) "")
+	  (command "offset" (/ G 2) GearLine CenterPoint "")
+        )
+        (command "erase" GearLine "")
+      )
+    )
+  )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ;사이클로이드(cycloid) 랙(rack)치형의 보조선을 그리는 서브프로그램.
+  (defun cycloid_rack_extension_draw (/)
+    (command "layer" "m" "Center line" "c" "6" "" "")
+
+    (if (< rack 0)
+      (progn
+        (command "line" (list (- x0 (* me 1.2)) y0) (list (+ x0 (* mh 1.2)) y0) "");X축 중심선
+        (command "line" (list x0 (- y0 (* 0.6 pi me))) (list x0 (+ y0 (* pi (+ me mh) (1- Z)) (* 0.6 pi me))) "");Y축 중심선
+      )
+      (progn
+        (command "line" (list (- x0 (* 0.6 pi me)) y0) (list (+ x0 (* pi (+ me mh) (1- Z)) (* 0.6 pi me)) y0) "");X축 중심선
+        (command "line" (list x0 (+ y0 (* me 1.2))) (list x0 (- y0 (* mh 1.2))) "");Y축 중심선
+      )
+    )
+    (command "layer" "m" "Explanatory note" "c" "7" "" "")
+    (if (= me mh)
+      (command "text" (list (- x0 (if (< rack 0) (* -0.1 me) (* 0.5 me))) (- y0 (* (+ me mh) 0.25) (* 1.2 mh))) (* (+ me mh) 0.2) "0"
+	       (strcat (if (= OsLanguage "KOR") "창성원:" "Make:")
+		       (rtos EpiCycloidMaking) (gear_unit_display CycloidMakingRatio)))
+      (command "text" (list (- x0 (if (< rack 0) (* -0.1 me) (* 0.5 me))) (- y0 (* (+ me mh) 0.25) (* 1.2 mh))) (* (+ me mh) 0.2) "0"
+	       (strcat (if (= OsLanguage "KOR") "창성원:" "Make:")
+		       (rtos EpiCycloidMaking) "(" (rtos HypoCycloidMaking) ")" (gear_unit_display CycloidMakingRatio)))
+    )
+  )
+
+
+
+
+
+
+  ;사이클로이드(cycloid) 랙(rack)치형을 작도하는 서브프로그램.
+  (defun cycloid_rack_tooth_form_draw (/)
+
+    ;위쪽 랙(rack) Cycloid곡선을 그립니다.
+    (setq BLine nil)
+    (setq counter (1- Ne))
+    (while (>= counter 0)
+      (setq step (/ (* pi (+ 0 counter) counter) (* (+ 0 Ne) Ne)));각도를 증가시킴
+
+      (setq xd (+ x0 (* -0.5 pi me) (* 0.5 me step) (* -0.5 me (sin step))));위성원 위의 한 점의 X좌표
+      (setq yd (+ y0 (* 0.5 me) (* -0.5 me (cos step))));위성원 위의 한 점의 Y좌표
+      (cond
+        ((= counter (1- Ne))
+         (setq xs (+ x0 (* 0.5 pi me) (* -0.5 me step) (* 0.5 me (sin step))))
+         (command "arc" (list xs yd) (list x0 (+ y0 me)) (list xd yd))
+         (command "pedit" (entlast) "y" "")
+         (setq ELine (entlast))
+        )
+        ((= counter (- Ne 2))
+         (command "arc" "" (list xd yd))
+         (command "pedit" (entlast) "y" "") (setq BLine (entlast))
+        )
+        (T
+         (command "arc" "" (list xd yd))
+         (command "pedit" BLine "j" (entlast) "" "")
+        )
+      );End cond
+
+      (setq counter (1- counter))
+    );End while
+
+
+    ;치형을 대칭해서 위쪽 치형을 폴리라인으로 연결합니다.
+    (command "mirror" BLine "" CenterPoint (list x0 (+ y0 mh)) "")
+    (command "pedit" ELine "j" BLine (entlast) "" "")
+
+
+    ;아래쪽 랙(rack) Cycloid곡선을 그립니다.
+    (setq BLine nil)
+    (if (> Z 1) (setq counter (1- Nh)) (setq counter -1))
+    (while (>= counter 0)
+      (setq step (/ (* pi (+ 0 counter) counter) (* (+ 0 Nh) Nh)));각도를 증가시킴
+
+      (setq xd (+ x0 (* 0.5 pi me) (* 0.5 mh step) (* -0.5 mh (sin step))));위성원 위의 한 점의 X좌표
+      (setq yd (+ y0 (* -0.5 mh) (* 0.5 mh (cos step))));위성원 위의 한 점의 Y좌표
+
+      (cond
+        ((= counter (1- Nh))
+         (setq xs (+ x0 (* 0.5 pi me) (* pi mh) (* -0.5 mh step) (* 0.5 mh (sin step))))
+         (command "arc" (list xs yd) (list (+ x0 (* 0.5 pi (+ me mh))) (- y0 mh)) (list xd yd))
+         (command "pedit" (entlast) "y" "")
+         (setq RLine (entlast))
+        )
+        ((= counter (- Nh 2))
+         (command "arc" "" (list xd yd))
+         (command "pedit" (entlast) "y" "") (setq BLine (entlast))
+        )
+        (T
+         (command "arc" "" (list xd yd))
+         (command "pedit" BLine "j" (entlast) "" "")
+        )
+      );End cond
+
+      (setq counter (1- counter))
+    );End while
+
+
+    ;치형을 대칭해서 위쪽 치형을 폴리라인으로 연결합니다.
+    (if (> Z 1)
+      (progn
+        (command "mirror" BLine "" (list (+ x0 (* 0.5 pi (+ me mh))) y0) (list (+ x0 (* 0.5 pi (+ me mh))) (- y0 mh)) "")
+        (command "pedit" RLine "j" BLine (entlast) "" "")
+      )
+    )
+
+
+    ;치형을 잇수만큼 배열합니다.
+    (if (> Z 1) (command "array" ELine "" "R" "1" (fix Z) (* (+ me mh) pi)))
+    (if (> Z 2) (command "array" RLine "" "R" "1" (fix (1- Z)) (* (+ me mh) pi)))
+
+
+    ;배열을 통해 만들어진 치형을 모두 찾습니다.
+    (setq DrawSum (ssadd))
+
+    (setq BLine ELine)
+    (setq counter 0)
+    (while (<= counter 0)
+      (setq DrawSum (ssadd BLine DrawSum))
+      (setq BLine (entnext BLine))
+      (setq counter (1- counter))
+      (if (= BLine nil) (setq counter (abs counter)))
+    )
+
+
+    ;치형을 모두 연결합니다.
+    (if (> Z 1) (command "pedit" ELine "j" DrawSum "" ""))
+    (command "pedit" ELine "l" "on" "")
+
+    ;랙의 틈(GAP)을 offset명령으로 처리합니다.
+    (if (/= G 0)
+      (progn
+        (setq GearLine (entlast))
+        (if (< G 0)
+	  (command "offset" (/ G -2) GearLine (list x0 (+ y0 me mh)) "")
+	  (command "offset" (/ G 2) GearLine (list x0 (- y0 mh)) "")
+        )
+        (command "erase" GearLine "")
+      )
+    )
+
+    ;랙을 90도 회전 할 것인지 결정합니다.
+    (setq ELine (entlast))
+    (if (< rack 0)
+      (command "rotate" ELine "" CenterPoint "90")
+    )
+  )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ;체인(chain) 치형의 설정값을 변경하는 서브 프로그램.
+  (defun chain_gear_value_item_setting (/)
+    (if (/= KeyCounter 0) (princ KeyNumber))
+
+    (setq buffer (atof KeyNumber))
+
+
+    (setq KeyNumber nil)
+    (setq KeyUnit nil)
+  )
+
+
+
+
+
+  ;체인(chain) 치형 설정값 표시 서브 프로그램.
+  (defun chain_gear_item_display (/)
+    (if (= KeyItem "V")
+      (progn
+        (princ "\n") (princ GearType)
+        (princ ":S") (princ SeriesNumber)
+        (setq KeyItem "Blank")
+      )
+    )
+
+    (common_gear_item_display);공통부분 표기 스브 프로그램
+
+    (if (= KeyItem "Blank")
+      (progn
+        (if (= OsLanguage "KOR")
+	  (princ "\n체인 기어 잇수(소수는 랙) 또는 [V/S/T] <")
+	  (princ "\nChain gear teeth(decimal is rack) or [V/S/T] <")
+        )
+        (princ ChainTeeth)
+      )
+    )
+    (princ ">:")
+
+  )
+
+
+
+
+
+  ;체인(chain) 치형 작도를 위해 초기값을 계산하는 서브프로그램.
+  (defun chain_gear_base_value_calculation (/)
+
+    (setq Z (float (abs ChainTeeth)));잇수
+  
+  )
+
+
+
+
+
+
+  ;체인(chain) 치형의 보조선을 그리는 서브프로그램.
+  (defun chain_gear_extension_draw (/)
+    ;Center line 레이어에 보조선을 그립니다.
+    (command "layer" "m" "Center line" "c" "6" "" "")
+
+    (command "circle" CenterPoint Z); 피치원
+
+    ;Explanatory note 레이어에 문자를 적습니다.
+    (command "layer" "m" "Explanatory note" "c" "7" "" "")
+
+    (command "text" (list x0 y0) Z "0"
+	     (strcat (if (= OsLanguage "KOR") "잇수:" "Teeth:") (itoa ChainTeeth)))
+    
+  )
+
+
+
+
+
+  ;체인(chain) 치형을 작도하는 서브프로그램.
+  (defun chain_gear_tooth_form_draw (/)
+
+    ;위쪽 랙(rack) chain곡선을 그립니다.
+    (setq BLine nil)
+  
+  )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ;트로코이드(trochoid) 치형의 설정값을 변경하는 서브 프로그램.
+  (defun trochoid_gear_value_item_setting (/)
+    (if (/= KeyCounter 0) (princ KeyNumber))
+
+    (setq buffer (atof KeyNumber))
+
+
+    (setq KeyNumber nil)
+    (setq KeyUnit nil)
+  )
+
+
+
+
+
+  ;트로코이드(trochoid) 치형 설정값 표시 서브 프로그램.
+  (defun trochoid_gear_item_display (/)
+    (if (= KeyItem "V")
+      (progn
+        (princ "\n") (princ GearType)
+        (princ ":S") (princ SeriesNumber)
+        (setq KeyItem "Blank")
+      )
+    )
+
+    (common_gear_item_display);공통부분 표기 서브 프로그램
+
+    (if (= KeyItem "Blank")
+      (progn
+        (if (= OsLanguage "KOR")
+	  (princ "\n트로코이드 기어 잇수(소수는 랙) 또는 [V/S/T] <")
+	  (princ "\nTrochoid gear teeth(decimal is rack) or [V/S/T] <")
+        )
+        (princ TrochoidTeeth)
+      )
+    )
+    (princ ">:")
+
+  )
+
+
+
+
+
+  ;트로코이드(trochoid) 치형 작도를 위해 초기값을 계산하는 서브프로그램.
+  (defun trochoid_gear_base_value_calculation (/)
+
+    (setq Z (float (abs TrochoidTeeth)));잇수
+  
+  )
+
+
+
+
+
+
+  ;트로코이드(trochoid) 치형의 보조선을 그리는 서브프로그램.
+  (defun trochoid_gear_extension_draw (/)
+    ;Center line 레이어에 보조선을 그립니다.
+    (command "layer" "m" "Center line" "c" "6" "" "")
+
+    (command "circle" CenterPoint Z); 피치원
+
+    ;Explanatory note 레이어에 문자를 적습니다.
+    (command "layer" "m" "Explanatory note" "c" "7" "" "")
+
+    (command "text" (list x0 y0) Z "0"
+	     (strcat (if (= OsLanguage "KOR") "잇수:" "Teeth:") (itoa TrochoidTeeth)))
+    
+  )
+
+
+
+
+
+  ;트로코이드(trochoid) 치형을 작도하는 서브프로그램.
+  (defun trochoid_gear_tooth_form_draw (/)
+
+    ;위쪽 랙(rack) Cycloid곡선을 그립니다.
+    (setq BLine nil)
+  
+  )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ;원통(cylinder) 치형의 설정값을 변경하는 서브 프로그램.
+  (defun cylinder_gear_value_item_setting (/)
+    (if (/= KeyCounter 0) (princ KeyNumber))
+
+    (setq buffer (atof KeyNumber))
+
+
+    (setq KeyNumber nil)
+    (setq KeyUnit nil)
+  )
+
+
+
+
+
+  ;원통(cylinder) 치형 설정값 표시 서브 프로그램.
+  (defun cylinder_gear_item_display (/)
+    (if (= KeyItem "V")
+      (progn
+        (princ "\n") (princ GearType)
+        (princ ":S") (princ SeriesNumber)
+        (setq KeyItem "Blank")
+      )
+    )
+
+    (common_gear_item_display);공통부분 표기 스브 프로그램
+
+    (if (= KeyItem "Blank")
+      (progn
+        (if (= OsLanguage "KOR")
+	  (princ "\n원통 기어 잇수(소수는 랙) 또는 [V/S/T] <")
+	  (princ "\nCylinder gear teeth(decimal is rack) or [V/S/T] <")
+        )
+        (princ CylinderTeeth)
+      )
+    )
+    (princ ">:")
+
+  )
+
+
+
+
+
+  ;원통(cylinder) 치형 작도를 위해 초기값을 계산하는 서브프로그램.
+  (defun cylinder_gear_base_value_calculation (/)
+
+    (setq Z (float (abs CylinderTeeth)));잇수
+  
+  )
+
+
+
+
+
+
+  ;원통(cylinder) 치형의 보조선을 그리는 서브프로그램.
+  (defun cylinder_gear_extension_draw (/)
+    ;Center line 레이어에 보조선을 그립니다.
+    (command "layer" "m" "Center line" "c" "6" "" "")
+
+    (command "circle" CenterPoint Z); 피치원
+
+    ;Explanatory note 레이어에 문자를 적습니다.
+    (command "layer" "m" "Explanatory note" "c" "7" "" "")
+
+    (command "text" (list x0 y0) Z "0"
+	     (strcat (if (= OsLanguage "KOR") "잇수:" "Teeth:") (itoa CylinderTeeth)))
+    
+  )
+
+
+
+
+
+  ;원통(cylinder) 치형을 작도하는 서브프로그램.
+  (defun cylinder_gear_tooth_form_draw (/)
+
+    ;위쪽 랙(rack) Cycloid곡선을 그립니다.
+    (setq BLine nil)
+  
+  )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ;기어 공통부분 설정값 표시 서브 프로그램.
+  (defun common_gear_item_display (/)
+    (if (= OsLanguage "KOR")
+      (cond
+        ((= KeyItem "S") (princ "\n치형을 그리는 호의 수 <") (princ SeriesNumber))
+        ((= KeyItem "T") (princ "\n기어 종류 [Involute/Cycloid/Trochoid/Part-Cycloid/ChaiN/CylinDer] <") (princ GearType))
+        ((= KeyItem "Z") (setq KeyItem "Blank"))
+        ((/= KeyItem "Blank") (princ "없는 항목입니다.") (setq KeyItem "Blank"))
+      );End cond
+      (cond
+        ((= KeyItem "S") (princ "\nThe number of arc to draw tooth <") (princ SeriesNumber))
+        ((= KeyItem "T") (princ "\nGear type [Involute/Cycloid/Trochoid/Part-Cycloid/ChaiN/CylinDer] <") (princ GearType))
+        ((= KeyItem "Z") (setq KeyItem "Blank"))
+        ((/= KeyItem "Blank") (princ "Is not an item.") (setq KeyItem "Blank"))
+      );End cond
+    );End if
+  )
+
+
+
+
+
+  ;기어종류에 따라 설정화면을 호출하는 서브 프로그램
+  (defun gear_item_display (/)
+    (cond
+      ((= GearType "Involute") (involute_gear_item_display))
+      ((= GearType "PartCycloid") (partcycloid_gear_item_display))
+      ((= GearType "Cycloid") (cycloid_gear_item_display))
+      ((= GearType "Chain") (chain_gear_item_display))
+      ((= GearType "Trochoid") (trochoid_gear_item_display))
+      ((= GearType "Cylinder") (cylinder_gear_item_display))
+    )
+  )
+
+
+
+
+
+  ;LISP실행중에 에러가 발생하면 처리하는 부분
+  (defun *error* (msg)
+    (if (= OsLanguage "KOR") (princ "\n; 오류: ") (princ "\n; Error: ")) (princ msg)
+    (if (/= cmdecho nil) (setvar "cmdecho" cmdecho))
+    (if (/= osmode nil) (setvar "osmode" osmode))
+    (if (/= orthomode nil) (setvar "orthomode" orthomode))
+    (if (/= clayer nil) (setvar "clayer" clayer))
+    (princ)
+  ) ;defun
+
+  ;;;;;----- 모든 서브 프로그램 끝  >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+  ;;;;; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+  ;;;;; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+  ;;;;; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+  ;;;;; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+  ;;;;; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+
+
+
+
+
+
+
+
+
+  ;-----> 메인 프로그램 시작   >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+  ;;;;; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+  ;;;;; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+  ;;;;; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+  ;;;;; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+  ;;;;; >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+
+
+  ;LISP실행동안 현재 AutoCAD의 환경변수 값을 저장하고 LISP를 종료할 때 복원합니다.
+  (setq cmdecho (getvar "cmdecho")) (setvar "cmdecho" 0);LISP 실행 상황을 보이지 않도록 설정합니다.
+  (setq clayer (getvar "clayer"));현재 레이어를 저장합니다.
+
+
+  (graphscr);LISP를 그리기 모드에서 실행합니다.
+  
+  (gear_variable_initialization);LISP가 처음 실행 돼면 초기 설정값을 불러옵니다.
+
+  ; 치형 곡선을 그리기 위해 필요한 정보를 입력 받습니다.
+  (setq KeyItem "Blank")
+
+  (gear_item_display);기어종류에 따라 설정화면을 호출합니다.
+  
+  (setq KeyIn nil)
+  (while (/= KeyItem "Exit");항목 설정 상태이면 계속 키를 입력 받습니다.
+
+    (if (= KeyIn nil)
+      (progn (setq KeyCounter 0) (setq KeyIn (strcase (getstring))));키를 입력받습니다.
+      (setq KeyCounter (1+ KeyCounter))
+    )
+
+    (setq KeyNumber nil)
+    (setq KeyUnit nil)
+    
+    (cond
+      ((or (= (substr KeyIn 1 1) ":") (= (substr KeyIn 1 1) ","))
+       (setq KeyIn (substr KeyIn 2 (strlen KeyIn)))
+       (if (= KeyIn "") (gear_item_display))
+      )
+      ((and (= KeyItem "Blank") (= KeyIn "")) (setq KeyItem "Exit"))
+      ((and (/= KeyItem "Blank") (= KeyIn "")) (setq KeyItem "Blank") (gear_item_display))
+      ((or (and (= KeyItem "Blank") (= KeyIn "COREA")) (and (= KeyItem "Blank") (= KeyIn "KOREA")))
+       (setq OsLanguage "KOR") (setq KeyIn nil)
+       (gear_item_display)
+      )
+      ((and (= KeyItem "Blank") (= KeyIn "ENGLISH"))
+       (setq OsLanguage "ENG") (setq KeyIn nil)
+       (gear_item_display)
+      )
+      ((and (= KeyItem "Blank") (= (substr KeyIn 1 8) "INVOLUTE"))
+       (setq GearType "Involute")
+       (setq KeyIn (substr KeyIn 9 (strlen KeyIn)))
+       (gear_item_display)
+      )
+      ((and (= KeyItem "Blank") (= (substr KeyIn 1 11) "PARTCYCLOID"))
+       (setq GearType "PartCycloid")
+       (setq KeyIn (substr KeyIn 12 (strlen KeyIn)))
+       (gear_item_display)
+      )
+      ((and (= KeyItem "Blank") (= (substr KeyIn 1 7) "CYCLOID"))
+       (setq GearType "Cycloid")
+       (setq KeyIn (substr KeyIn 8 (strlen KeyIn)))
+       (gear_item_display)
+      )
+      ((and (= KeyItem "Blank") (= (substr KeyIn 1 5) "CHAIN"))
+       (setq GearType "Chain")
+       (setq KeyIn (substr KeyIn 6 (strlen KeyIn)))
+       (gear_item_display)
+      )
+      ((and (= KeyItem "Blank") (= (substr KeyIn 1 8) "TROCHOID"))
+       (setq GearType "Trochoid")
+       (setq KeyIn (substr KeyIn 9 (strlen KeyIn)))
+       (gear_item_display)
+      )
+      ((and (= KeyItem "Blank") (= (substr KeyIn 1 8) "CYLINDER"))
+       (setq GearType "Cylinder")
+       (setq KeyIn (substr KeyIn 9 (strlen KeyIn)))
+       (gear_item_display)
+      )
+      ((and (= KeyItem "Blank") (>= (ascii (substr KeyIn 1 1)) 65) (<= (ascii (substr KeyIn 1 1)) 90))
+       (setq KeyItem (substr KeyIn 1 1))
+       (setq KeyIn (substr KeyIn 2 (strlen KeyIn)))
+       (gear_item_display)
+      )
+      ((and (= KeyItem "T") (= (substr KeyIn 1 2) "PC"))
+       (setq KeyIn (substr KeyIn 3 (strlen KeyIn)))
+       (setq GearType "PartCycloid")
+       (setq KeyItem "Blank")
+       (if (/= KeyCounter 0) (princ GearType))
+       (gear_item_display)
+      )
+      ((and (= KeyItem "T") (= (substr KeyIn 1 2) "CN"))
+       (setq KeyIn (substr KeyIn 3 (strlen KeyIn)))
+       (setq GearType "Chain")
+       (setq KeyItem "Blank")
+       (if (/= KeyCounter 0) (princ GearType))
+       (gear_item_display)
+      )
+      ((and (= KeyItem "T") (= (substr KeyIn 1 2) "CD"))
+       (setq KeyIn (substr KeyIn 3 (strlen KeyIn)))
+       (setq GearType "Cylinder")
+       (setq KeyItem "Blank")
+       (if (/= KeyCounter 0) (princ GearType))
+       (gear_item_display)
+      )
+      ((and (= KeyItem "T") (= (substr KeyIn 1 1) "I"))
+       (setq KeyIn (substr KeyIn 2 (strlen KeyIn)))
+       (setq GearType "Involute")
+       (setq KeyItem "Blank")
+       (if (/= KeyCounter 0) (princ GearType))
+       (gear_item_display)
+      )
+      ((and (= KeyItem "T") (= (substr KeyIn 1 1) "C"))
+       (setq KeyIn (substr KeyIn 2 (strlen KeyIn)))
+       (setq GearType "Cycloid")
+       (setq KeyItem "Blank")
+       (if (/= KeyCounter 0) (princ GearType))
+       (gear_item_display)
+      )
+      ((and (= KeyItem "T") (= (substr KeyIn 1 1) "T"))
+       (setq KeyIn (substr KeyIn 2 (strlen KeyIn)))
+       (setq GearType "Trochoid")
+       (setq KeyItem "Blank")
+       (if (/= KeyCounter 0) (princ GearType))
+       (gear_item_display)
+      )
+      ((= KeyItem "T")
+       (setq KeyIn nil)
+       (if (= OsLanguage "KOR") (princ "잘못 입력하였습니다.") (princ "Cannot be value."))
+       (gear_item_display)
+      )
+      ((or (= (substr KeyIn 1 1) "+") (= (substr KeyIn 1 1) "-") (= (substr KeyIn 1 1) ".");부호및 소수부분
+	   (and (>= (ascii (substr KeyIn 1 1)) 48) (<= (ascii (substr KeyIn 1 1)) 57)));숫자부분
+       (setq counter 2)
+       (while (> counter 0)
+	 (if (or (= (substr KeyIn counter 1) ".") (and (>= (ascii (substr KeyIn counter 1)) 48) (<= (ascii (substr KeyIn counter 1)) 57)))
+	   (setq counter (1+ counter))
+	   (progn;입력 받은 키값이 숫자가 아니면 다음 항목으로 이동합니다.
+	     (setq KeyNumber (substr KeyIn 1 (1- counter)))
+	     (setq KeyIn (substr KeyIn counter (strlen KeyIn)))
+	     (setq counter (* -1 counter))
+	   );End progn
+	 );End if
+       );End while
+
+       (if (and (/= (substr KeyIn 1 1) ":") (/= (substr KeyIn 1 1) ","))
+	 (progn
+	   (cond
+	     ((or (= (substr KeyIn 1 2) "KM") (= (substr KeyIn 1 2) "CM"))
+	      (setq KeyUnit (strcat (substr KeyIn 1 1) (strcase (substr KeyIn 2 1) t)))
+	      (setq KeyIn (substr KeyIn 3 (strlen KeyIn)))
+	     )
+	     ((or (= (substr KeyIn 1 2) "MM") (= (substr KeyIn 1 2) "UM") (= (substr KeyIn 1 2) "NM"))
+	      (setq KeyUnit (strcase (substr KeyIn 1 2) t))
+	      (setq KeyIn (substr KeyIn 3 (strlen KeyIn)))
+	     )
+	     ((= (substr KeyIn 1 1) "M")
+	      (setq KeyUnit (strcase (substr KeyIn 1 1) t))
+	      (setq KeyIn (substr KeyIn 2 (strlen KeyIn)))
+	     )
+	   );End cond
+	 );End progn
+       );End if
+
+       (cond
+	 ((= GearType "Involute") (involute_gear_value_item_setting))
+	 ((= GearType "PartCycloid") (partcycloid_gear_value_item_setting))
+	 ((= GearType "Cycloid") (cycloid_gear_value_item_setting))
+	 ((= GearType "Chain") (chain_gear_value_item_setting))
+	 ((= GearType "Trochoid") (trochoid_gear_value_item_setting))
+	 ((= GearType "Cylinder") (cylinder_gear_value_item_setting))
+       )
+
+       (if (/= KeyItem "Exit") (gear_item_display))
+      )
+      (T
+       (if (= OsLanguage "KOR") (princ "잘못 입력하였습니다.") (princ "Cannot be value."))
+       (setq KeyIn (substr KeyIn 2 (strlen KeyIn)))
+       (gear_item_display)
+      )
+    );End cond
+    
+    (if (= KeyIn "") (setq KeyIn nil))
+  );End while
+
+
+
+  ; 기어의 중심점을 입력 받습니다.
+  (if (= OsLanguage "KOR") (princ "\n기어 중심점<") (princ "\nCenter gear<")) (princ CenterPoint) (princ ">:") (setq KeyIn (getpoint))
+  (if (/= KeyIn nil) (setq CenterPoint KeyIn))
+
+  (setq x0 (car CenterPoint)); 기어 중심점 좌표를 분석합니다.
+  (setq y0 (cadr CenterPoint)); 기어 중심점 좌표를 분석합니다.
+
+  (cond
+    ((and (= GearType "Involute") (/= rack 0)) (involute_rack_base_value_calculation));인벌류트(involute) 랙(Rack)치형 작도를 위해 초기값을 계산
+    ((= GearType "Involute") (involute_gear_base_value_calculation));인벌류트(involute) 치형 작도를 위해 초기값을 계산
+    ((= GearType "PartCycloid") (partcycloid_gear_base_value_calculation))
+    ((= GearType "Cycloid") (cycloid_gear_base_value_calculation));사이클로이드(cycloid) 치형 작도를 위해 초기값을 계산
+    ((= GearType "Chain") (chain_gear_base_value_calculation))
+    ((= GearType "Trochoid") (trochoid_gear_base_value_calculation));트로코이드(trochoid) 치형 작도를 위해 초기값을 계산
+    ((= GearType "Cylinder") (cylinder_gear_base_value_calculation))
+  )
+  
+
+  ;LISP에서 정확한 좌표점을 그리기 위해 현제 객체 스냅값을 저장하고 객체 스냅을 끕니다.
+  (setq osmode (getvar "osmode")) (setvar "osmode" 0);스냅 끄기
+  (setq orthomode (getvar "orthomode")) (setvar "orthomode" 0);직교 끄기
+
+
+  (cond
+    ((and (= GearType "Involute") (/= rack 0)) (involute_rack_extension_draw));인벌류트(involute) 랙(Rack)치형의 보조선을 그립니다.
+    ((= GearType "Involute") (involute_gear_extension_draw));인벌류트(involute) 치형의 보조선을 그립니다.
+    ((= GearType "PartCycloid") (partcycloid_gear_extension_draw))
+    ((and (= GearType "Cycloid") (/= rack 0)) (cycloid_rack_extension_draw));사이클로이드(cycloid) 랙(Rack)치형의 보조선을 그립니다.
+    ((= GearType "Cycloid") (cycloid_gear_extension_draw));사이클로이드(cycloid) 치형의 보조선을 그립니다.
+    ((= GearType "Chain") (chain_gear_extension_draw))
+    ((= GearType "Trochoid") (trochoid_gear_extension_draw));트로코이드(trochoid) 치형의 보조선을 그립니다.
+    ((= GearType "Cylinder") (cylinder_gear_extension_draw))
+  )
+
+
+  ;GearTyper값의 레이어에 치형을 그립니다.
+  (command "layer" "m" (strcat GearType " gear") "c" "3" "" "")
+
+
+  (cond
+    ((and (= GearType "Involute") (/= rack 0)) (involute_rack_tooth_form_draw));인벌류트(involute) 랙(Rack)치형치형을 작도합니다.
+    ((= GearType "Involute") (involute_gear_tooth_form_draw));인벌류트(involute) 치형을 작도합니다.
+    ((= GearType "PartCycloid") (partcycloid_gear_tooth_form_draw))
+    ((and (= GearType "Cycloid") (/= rack 0)) (cycloid_rack_tooth_form_draw));사이클로이드(cycloid) 랙(Rack)치형치형을 작도합니다.
+    ((= GearType "Cycloid") (cycloid_gear_tooth_form_draw));사이클로이드(cycloid) 치형을 작도합니다.
+    ((= GearType "Chain") (chain_gear_gear_tooth_form_draw))
+    ((= GearType "Trochoid") (trochoid_gear_tooth_form_draw));트로코이드(trochoid) 치형을 작도합니다.
+    ((= GearType "Cylinder") (cylinder_gear_tooth_form_draw))
+  )
+
+
+  ; AutoCAD의 설정 값을 LISP 실행 전으로 되돌립니다.
+  (setvar "clayer" clayer)
+  (setvar "osmode" osmode)
+  (setvar "orthomode" orthomode)
+  (setvar "cmdecho" cmdecho)
+
+  (princ)
+)
+
+
+
+;;한글로 "기어"를 입력 할 경우 위 프로그램을 실행 합니다.
+;(DEFUN C:기어 ()
+;  (C:gear)
+;)
