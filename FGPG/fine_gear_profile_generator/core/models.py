@@ -3,9 +3,33 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple, Union
 
 import numpy as np
+
+
+@dataclass
+class Arc:
+    """Represents a circular arc segment."""
+
+    center: Tuple[float, float]
+    radius: float
+    start_angle: float
+    end_angle: float
+
+
+@dataclass
+class Spline:
+    """Represents a spline curve defined by its vertices."""
+
+    vertices: List[Tuple[float, float]]
+
+
+@dataclass
+class StructuredToothProfile:
+    """A structured representation of a single tooth profile using geometric primitives."""
+
+    elements: List[Union[Arc, Spline]]
 
 
 @dataclass
@@ -140,17 +164,11 @@ class GearPairAnalysis:
 class GearProfileGeometry:
     """Generated geometric information for a single gear."""
 
-    coordinates: Tuple[np.ndarray, np.ndarray]
+    profile: Union[StructuredToothProfile, Tuple[np.ndarray, np.ndarray]]
     teeth: int
     pitch_angle: float
     alignment_angle: float
     undercut_status: str
-
-    def as_tuple(self) -> Tuple[np.ndarray, np.ndarray, int, float, float]:
-        """Return a tuple formatted for the plotting and export utilities."""
-
-        x_coords, y_coords = self.coordinates
-        return x_coords, y_coords, self.teeth, self.pitch_angle, self.alignment_angle
 
 
 @dataclass
@@ -169,13 +187,7 @@ class GearPairResult:
                 "contact_ratio": self.analysis.contact_ratio,
                 "center_distance": self.analysis.center_distance,
             },
-            "gear1": {
-                "profile": self.gear1.as_tuple(),
-                "undercut_status": self.gear1.undercut_status,
-            },
-            "gear2": {
-                "profile": self.gear2.as_tuple(),
-                "undercut_status": self.gear2.undercut_status,
-            },
+            "gear1": {"undercut_status": self.gear1.undercut_status},
+            "gear2": {"undercut_status": self.gear2.undercut_status},
         }
 
