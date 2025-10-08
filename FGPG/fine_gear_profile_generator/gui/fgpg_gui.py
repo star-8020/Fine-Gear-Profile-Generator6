@@ -40,9 +40,7 @@ GRAPHIC_FIELDS = [
     ("y_0", "Center, y_0", "[mm]"),
     ("seg_involute", "Seg, involute", "[ea]"),
     ("seg_edge_r", "Seg, edge_r", "[ea]"),
-    ("seg_root_r", "Seg, root_r", "[ea]"),
-    ("seg_outer", "Seg, outer", "[ea]"),
-    ("seg_root", "Seg, root", "[ea]")
+    ("seg_root_r", "Seg, root_r", "[ea]")
 ]
 
 class GearApp(tk.Tk):
@@ -199,8 +197,6 @@ class GearApp(tk.Tk):
                 involute=int(self.vars['seg_involute'].get()),
                 edge=int(self.vars['seg_edge_r'].get()),
                 root_round=int(self.vars['seg_root_r'].get()),
-                outer=int(self.vars['seg_outer'].get()),
-                root=int(self.vars['seg_root'].get()),
             )
             driver = GearSpec(
                 teeth=int(self.vars['teeth_number_z'].get()),
@@ -248,8 +244,8 @@ class GearApp(tk.Tk):
 
             image_exporter.export_gear_pair_to_image(
                 working_dir,
-                gear1.as_tuple(),
-                gear2.as_tuple(),
+                gear1,
+                gear2,
                 analysis.center_distance,
                 params.module,
                 params.driver.teeth,
@@ -260,8 +256,8 @@ class GearApp(tk.Tk):
 
             dxf_exporter.export_gear_pair_to_dxf(
                 working_dir,
-                gear1.as_tuple(),
-                gear2.as_tuple(),
+                gear1,
+                gear2,
                 analysis.center_distance,
                 params.center_x,
                 params.center_y,

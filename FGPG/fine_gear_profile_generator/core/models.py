@@ -59,8 +59,6 @@ class SegmentationSettings:
     involute: int
     edge: int
     root_round: int
-    outer: int
-    root: int
 
     def __post_init__(self) -> None:
         """Ensure that the segmentation counts are strictly positive integers."""
@@ -69,8 +67,6 @@ class SegmentationSettings:
             ("involute", self.involute),
             ("edge", self.edge),
             ("root_round", self.root_round),
-            ("outer", self.outer),
-            ("root", self.root),
         ):
             if value <= 0:
                 raise ValueError(f"Segmentation value '{name}' must be positive.")
@@ -117,8 +113,6 @@ class GearPairParameters:
             "SEG_INVOLUTE": self.segmentation.involute,
             "SEG_EDGE_R": self.segmentation.edge,
             "SEG_ROOT_R": self.segmentation.root_round,
-            "SEG_OUTER": self.segmentation.outer,
-            "SEG_ROOT": self.segmentation.root,
             "z2": self.driven.teeth,
             "x2": self.driven.profile_shift,
             "X_0": self.center_x,
@@ -133,8 +127,6 @@ class GearPairParameters:
             involute=int(params["SEG_INVOLUTE"]),
             edge=int(params["SEG_EDGE_R"]),
             root_round=int(params["SEG_ROOT_R"]),
-            outer=int(params["SEG_OUTER"]),
-            root=int(params["SEG_ROOT"]),
         )
         return cls(
             module=float(params["M"]),

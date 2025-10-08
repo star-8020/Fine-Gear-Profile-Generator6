@@ -27,8 +27,6 @@ FALLBACK_DEFAULTS = {
     'seg_involute': 15,
     'seg_edge_r': 15,
     'seg_root_r': 15,
-    'seg_outer': 5,
-    'seg_root': 5,
     'working_directory': './result/',
     'current_image_path': 'Result1.png'
 }
@@ -48,15 +46,12 @@ UI_TO_CALCULATION_MAP = {
     'seg_involute': 'SEG_INVOLUTE',
     'seg_edge_r': 'SEG_EDGE_R',
     'seg_root_r': 'SEG_ROOT_R',
-    'seg_outer': 'SEG_OUTER',
-    'seg_root': 'SEG_ROOT',
     'teeth_number_z2': 'z2',
     'offset_factor_x2': 'x2'
 }
 
 INT_PARAM_KEYS = {
-    'Z', 'SEG_INVOLUTE', 'SEG_EDGE_R', 'SEG_ROOT_R', 'SEG_OUTER',
-    'SEG_ROOT', 'z2'
+    'Z', 'SEG_INVOLUTE', 'SEG_EDGE_R', 'SEG_ROOT_R', 'z2'
 }
 
 
@@ -97,8 +92,6 @@ def _build_segmentation(defaults: Dict[str, object]) -> SegmentationSettings:
         involute=int(defaults.get('seg_involute', FALLBACK_DEFAULTS['seg_involute'])),
         edge=int(defaults.get('seg_edge_r', FALLBACK_DEFAULTS['seg_edge_r'])),
         root_round=int(defaults.get('seg_root_r', FALLBACK_DEFAULTS['seg_root_r'])),
-        outer=int(defaults.get('seg_outer', FALLBACK_DEFAULTS['seg_outer'])),
-        root=int(defaults.get('seg_root', FALLBACK_DEFAULTS['seg_root'])),
     )
 
 
