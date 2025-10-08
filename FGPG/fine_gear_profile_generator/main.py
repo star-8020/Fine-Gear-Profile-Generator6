@@ -56,8 +56,8 @@ def run_headless_mode() -> None:
 
         dxf_exporter.export_gear_pair_to_dxf(
             working_dir,
-            result.gear1.as_tuple(),
-            result.gear2.as_tuple(),
+            result.gear1,
+            result.gear2,
             analysis.center_distance,
             params.center_x,
             params.center_y,

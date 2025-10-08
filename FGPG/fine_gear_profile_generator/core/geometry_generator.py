@@ -8,6 +8,39 @@ import numpy as np
 
 from . import gear_math
 from . import transformations
+from .models import ArcSegment, SplineSegment, ToothProfileData
+
+
+def _stack_points(x_values: np.ndarray, y_values: np.ndarray) -> np.ndarray:
+    """Combine x/y coordinate arrays into an ``(N, 2)`` array."""
+
+    return np.column_stack((x_values, y_values))
+
+
+def _create_spline_segment(x_values: np.ndarray, y_values: np.ndarray) -> SplineSegment:
+    """Create a :class:`SplineSegment` from arrays of x and y coordinates."""
+
+    return SplineSegment(points=_stack_points(x_values, y_values))
+
+
+def _create_arc_segment(
+    x_values: np.ndarray,
+    y_values: np.ndarray,
+    center: Tuple[float, float],
+) -> ArcSegment:
+    """Create an :class:`ArcSegment` for the provided coordinates."""
+
+    points = _stack_points(x_values, y_values)
+    shifted = points - np.array(center)
+    angles = np.arctan2(shifted[:, 1], shifted[:, 0])
+    radius = float(np.hypot(shifted[0, 0], shifted[0, 1]))
+    return ArcSegment(
+        center=center,
+        radius=radius,
+        start_angle=float(angles[0]),
+        end_angle=float(angles[-1]),
+        points=points,
+    )
 
 
 def involute_curve(
@@ -124,61 +157,6 @@ def root_arc(
     return x_coords, y_coords
 
 
-def combine_tooth_profile(
-    flank1_x: np.ndarray,
-    flank1_y: np.ndarray,
-    edge1_x: np.ndarray,
-    edge1_y: np.ndarray,
-    root1_x: np.ndarray,
-    root1_y: np.ndarray,
-    outer1_x: np.ndarray,
-    outer1_y: np.ndarray,
-    root_arc1_x: np.ndarray,
-    root_arc1_y: np.ndarray,
-    flank2_x: np.ndarray,
-    flank2_y: np.ndarray,
-    edge2_x: np.ndarray,
-    edge2_y: np.ndarray,
-    root2_x: np.ndarray,
-    root2_y: np.ndarray,
-    outer2_x: np.ndarray,
-    outer2_y: np.ndarray,
-    root_arc2_x: np.ndarray,
-    root_arc2_y: np.ndarray,
-) -> Tuple[np.ndarray, np.ndarray]:
-    """Combine all curve segments into a single continuous tooth profile."""
-
-    x_coords = np.concatenate(
-        (
-            outer2_x[1:],
-            edge2_x[1:],
-            flank2_x[1:],
-            root2_x[1:],
-            root_arc2_x[1:],
-            root_arc1_x,
-            root1_x[1:],
-            flank1_x[1:],
-            edge1_x[1:],
-            outer1_x[1:],
-        )
-    )
-    y_coords = np.concatenate(
-        (
-            outer2_y[1:],
-            edge2_y[1:],
-            flank2_y[1:],
-            root2_y[1:],
-            root_arc2_y[1:],
-            root_arc1_y,
-            root1_y[1:],
-            flank1_y[1:],
-            edge1_y[1:],
-            outer1_y[1:],
-        )
-    )
-    return x_coords, y_coords
-
-
 def _generate_tooth_profile_impl(
     module: float,
     teeth: int,
@@ -194,7 +172,7 @@ def _generate_tooth_profile_impl(
     segments_root_round: int,
     segments_outer: int,
     segments_root: int,
-) -> Tuple[np.ndarray, np.ndarray, float, float, float]:
+) -> Tuple[ToothProfileData, float, float, float]:
     """Generate a single gear tooth profile with associated metadata."""
 
     (teeth_calc, shift_calc, backlash_calc, addendum_calc, dedendum_calc,
@@ -300,33 +278,38 @@ def _generate_tooth_profile_impl(
     )
     root_arc2_x, root_arc2_y = transformations.reflect_y(root_arc1_x, root_arc1_y)
 
-    tooth_x, tooth_y = combine_tooth_profile(
-        flank1_x,
-        flank1_y,
-        edge1_x,
-        edge1_y,
-        root1_x,
-        root1_y,
-        outer1_x,
-        outer1_y,
-        root_arc1_x,
-        root_arc1_y,
-        flank2_x,
-        flank2_y,
-        edge2_x,
-        edge2_y,
-        root2_x,
-        root2_y,
-        outer2_x,
-        outer2_y,
-        root_arc2_x,
-        root_arc2_y,
+    addendum_left = _create_arc_segment(outer2_x, outer2_y, (0.0, 0.0))
+    addendum_right = _create_arc_segment(outer1_x, outer1_y, (0.0, 0.0))
+
+    tip_left = _create_arc_segment(edge2_x, edge2_y, (edge_center_x, -edge_center_y))
+    tip_right = _create_arc_segment(edge1_x, edge1_y, (edge_center_x, edge_center_y))
+
+    involute_left = _create_spline_segment(flank2_x, flank2_y)
+    involute_right = _create_spline_segment(flank1_x, flank1_y)
+
+    fillet_left = _create_spline_segment(root2_x, root2_y)
+    fillet_right = _create_spline_segment(root1_x, root1_y)
+
+    dedendum_left = _create_arc_segment(root_arc2_x, root_arc2_y, (0.0, 0.0))
+    dedendum_right = _create_arc_segment(root_arc1_x, root_arc1_y, (0.0, 0.0))
+
+    profile = ToothProfileData(
+        addendum_left=addendum_left,
+        tip_left=tip_left,
+        involute_left=involute_left,
+        fillet_left=fillet_left,
+        dedendum_left=dedendum_left,
+        dedendum_right=dedendum_right,
+        fillet_right=fillet_right,
+        involute_right=involute_right,
+        tip_right=tip_right,
+        addendum_right=addendum_right,
     )
 
-    return tooth_x, tooth_y, float(teeth_calc), float(pitch_angle), float(alignment_angle)
+    return profile, float(teeth_calc), float(pitch_angle), float(alignment_angle)
 
 
-def generate_tooth_profile(*args, **kwargs) -> Tuple[np.ndarray, np.ndarray, float, float, float]:
+def generate_tooth_profile(*args, **kwargs) -> Tuple[ToothProfileData, float, float, float]:
     """Public wrapper supporting both legacy kwargs and new positional arguments."""
 
     if kwargs:
