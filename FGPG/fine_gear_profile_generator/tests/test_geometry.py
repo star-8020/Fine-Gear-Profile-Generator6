@@ -7,6 +7,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from fine_gear_profile_generator.core import geometry_generator
+from fine_gear_profile_generator.core.models import ToothProfileData
 
 class TestGeometryGeneration(unittest.TestCase):
 
@@ -35,11 +36,10 @@ class TestGeometryGeneration(unittest.TestCase):
         and returns valid data structures.
         """
         try:
-            X_tooth, Y_tooth, Z_calc, P_ANGLE, ALIGN_ANGLE = geometry_generator.generate_tooth_profile(**self.test_params)
+            profile, Z_calc, P_ANGLE, ALIGN_ANGLE = geometry_generator.generate_tooth_profile(**self.test_params)
 
             # Check if the outputs are of the correct type
-            self.assertIsInstance(X_tooth, np.ndarray)
-            self.assertIsInstance(Y_tooth, np.ndarray)
+            self.assertIsInstance(profile, ToothProfileData)
             self.assertIsInstance(Z_calc, (int, float))
             self.assertIsInstance(P_ANGLE, float)
             self.assertIsInstance(ALIGN_ANGLE, float)
@@ -52,7 +52,8 @@ class TestGeometryGeneration(unittest.TestCase):
         Tests that the generated coordinates are finite and non-empty, which is a
         proxy for checking spline smoothness and avoiding mathematical errors.
         """
-        X_tooth, Y_tooth, _, _, _ = geometry_generator.generate_tooth_profile(**self.test_params)
+        profile, _, _, _ = geometry_generator.generate_tooth_profile(**self.test_params)
+        X_tooth, Y_tooth = profile.as_polyline()
 
         # Check that the arrays are not empty
         self.assertTrue(X_tooth.size > 0)

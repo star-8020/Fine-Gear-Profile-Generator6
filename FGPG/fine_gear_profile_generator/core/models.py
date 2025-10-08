@@ -9,6 +9,83 @@ import numpy as np
 
 
 @dataclass
+class SplineSegment:
+    """Representation of a curve segment that must be rendered as a spline."""
+
+    points: np.ndarray
+
+    def to_tuples(self) -> Tuple[np.ndarray, np.ndarray]:
+        """Return the x and y coordinates as separate arrays."""
+
+        return self.points[:, 0], self.points[:, 1]
+
+
+@dataclass
+class ArcSegment:
+    """Representation of a circular arc to be written to DXF output."""
+
+    center: Tuple[float, float]
+    radius: float
+    start_angle: float
+    end_angle: float
+    points: np.ndarray
+
+    def to_tuples(self) -> Tuple[np.ndarray, np.ndarray]:
+        """Return the sampled x and y coordinates along the arc."""
+
+        return self.points[:, 0], self.points[:, 1]
+
+
+@dataclass
+class ToothProfileData:
+    """Structured geometric description for a single gear tooth."""
+
+    addendum_left: ArcSegment
+    tip_left: ArcSegment
+    involute_left: SplineSegment
+    fillet_left: SplineSegment
+    dedendum_left: ArcSegment
+    dedendum_right: ArcSegment
+    fillet_right: SplineSegment
+    involute_right: SplineSegment
+    tip_right: ArcSegment
+    addendum_right: ArcSegment
+
+    def elements_in_order(self):
+        """Return the geometric elements in drawing order."""
+
+        return (
+            self.addendum_left,
+            self.tip_left,
+            self.involute_left,
+            self.fillet_left,
+            self.dedendum_left,
+            self.dedendum_right,
+            self.fillet_right,
+            self.involute_right,
+            self.tip_right,
+            self.addendum_right,
+        )
+
+    def segments_in_drawing_order(self) -> Tuple[np.ndarray, ...]:
+        """Return sampled segments in the order required to form a closed tooth."""
+
+        return tuple(element.points for element in self.elements_in_order())
+
+    def as_polyline(self) -> Tuple[np.ndarray, np.ndarray]:
+        """Generate a polyline representation for legacy plotting pipelines."""
+
+        segments = self.segments_in_drawing_order()
+        if not segments:
+            return np.array([]), np.array([])
+
+        combined = np.array(segments[0])
+        for segment in segments[1:]:
+            combined = np.vstack((combined, np.array(segment)[1:]))
+        return combined[:, 0], combined[:, 1]
+
+
+@dataclass
 class GearSpec:
     """Specification for a single gear.
 
@@ -140,7 +217,7 @@ class GearPairAnalysis:
 class GearProfileGeometry:
     """Generated geometric information for a single gear."""
 
-    coordinates: Tuple[np.ndarray, np.ndarray]
+    profile: "ToothProfileData"
     teeth: int
     pitch_angle: float
     alignment_angle: float
@@ -149,7 +226,7 @@ class GearProfileGeometry:
     def as_tuple(self) -> Tuple[np.ndarray, np.ndarray, int, float, float]:
         """Return a tuple formatted for the plotting and export utilities."""
 
-        x_coords, y_coords = self.coordinates
+        x_coords, y_coords = self.profile.as_polyline()
         return x_coords, y_coords, self.teeth, self.pitch_angle, self.alignment_angle
 
 

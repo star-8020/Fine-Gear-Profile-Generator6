@@ -48,14 +48,14 @@ def generate_gear_pair(
         calc_params['z2'], calc_params['ALPHA'], calc_params['x2'], calc_params['A']
     )
 
-    gear1_profile = geometry_generator.generate_tooth_profile(
+    gear1_profile, gear1_teeth, pitch_angle1, alignment_angle1 = geometry_generator.generate_tooth_profile(
         calc_params['M'], calc_params['Z'], calc_params['ALPHA'], calc_params['X'], calc_params['B'],
         calc_params['A'], calc_params['D'], calc_params['C'], calc_params['E'],
         calc_params['SEG_INVOLUTE'], calc_params['SEG_EDGE_R'], calc_params['SEG_ROOT_R'],
         calc_params['SEG_OUTER'], calc_params['SEG_ROOT']
     )
 
-    gear2_profile = geometry_generator.generate_tooth_profile(
+    gear2_profile, gear2_teeth, pitch_angle2, alignment_angle2 = geometry_generator.generate_tooth_profile(
         calc_params['M'], calc_params['z2'], calc_params['ALPHA'], calc_params['x2'], calc_params['B'],
         calc_params['A'], calc_params['D'], calc_params['C'], calc_params['E'],
         calc_params['SEG_INVOLUTE'], calc_params['SEG_EDGE_R'], calc_params['SEG_ROOT_R'],
@@ -68,17 +68,17 @@ def generate_gear_pair(
             center_distance=center_dist,
         ),
         gear1=GearProfileGeometry(
-            coordinates=(gear1_profile[0], gear1_profile[1]),
-            teeth=int(gear1_profile[2]),
-            pitch_angle=float(gear1_profile[3]),
-            alignment_angle=float(gear1_profile[4]),
+            profile=gear1_profile,
+            teeth=int(gear1_teeth),
+            pitch_angle=float(pitch_angle1),
+            alignment_angle=float(alignment_angle1),
             undercut_status=undercut_status1,
         ),
         gear2=GearProfileGeometry(
-            coordinates=(gear2_profile[0], gear2_profile[1]),
-            teeth=int(gear2_profile[2]),
-            pitch_angle=float(gear2_profile[3]),
-            alignment_angle=float(gear2_profile[4]),
+            profile=gear2_profile,
+            teeth=int(gear2_teeth),
+            pitch_angle=float(pitch_angle2),
+            alignment_angle=float(alignment_angle2),
             undercut_status=undercut_status2,
         ),
     )

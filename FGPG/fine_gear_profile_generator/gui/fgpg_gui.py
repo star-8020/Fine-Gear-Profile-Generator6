@@ -260,8 +260,8 @@ class GearApp(tk.Tk):
 
             dxf_exporter.export_gear_pair_to_dxf(
                 working_dir,
-                gear1.as_tuple(),
-                gear2.as_tuple(),
+                gear1,
+                gear2,
                 analysis.center_distance,
                 params.center_x,
                 params.center_y,

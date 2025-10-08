@@ -7,6 +7,7 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from fine_gear_profile_generator.core import geometry_generator
+from fine_gear_profile_generator.core.models import GearProfileGeometry
 from fine_gear_profile_generator.io import dxf_exporter
 
 class TestDxfOutput(unittest.TestCase):
@@ -37,8 +38,23 @@ class TestDxfOutput(unittest.TestCase):
         at the expected location.
         """
         # Generate the geometry for both gears
-        gear1_data = geometry_generator.generate_tooth_profile(**self.gear1_params)
-        gear2_data = geometry_generator.generate_tooth_profile(**self.gear2_params)
+        gear1_profile, gear1_teeth, gear1_pitch, gear1_align = geometry_generator.generate_tooth_profile(**self.gear1_params)
+        gear2_profile, gear2_teeth, gear2_pitch, gear2_align = geometry_generator.generate_tooth_profile(**self.gear2_params)
+
+        gear1_data = GearProfileGeometry(
+            profile=gear1_profile,
+            teeth=int(gear1_teeth),
+            pitch_angle=float(gear1_pitch),
+            alignment_angle=float(gear1_align),
+            undercut_status="OK",
+        )
+        gear2_data = GearProfileGeometry(
+            profile=gear2_profile,
+            teeth=int(gear2_teeth),
+            pitch_angle=float(gear2_pitch),
+            alignment_angle=float(gear2_align),
+            undercut_status="OK",
+        )
 
         # Define parameters for the exporter
         center_dist = 27.0  # A typical value for this gear pair
