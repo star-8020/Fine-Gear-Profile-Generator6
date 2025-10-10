@@ -67,19 +67,17 @@ def export_gear_pair_to_image(
     x_tooth2, y_tooth2 = _structured_profile_to_polyline(gear2.profile)
 
     # Plot gear 1
-    z1, pitch_angle1, alignment_angle1 = gear1.teeth, gear1.pitch_angle, gear1.alignment_angle
-    x_rot1, y_rot1 = transformations.rotate(x_tooth1, y_tooth1, alignment_angle1)
+    z1, pitch_angle1 = gear1.teeth, gear1.pitch_angle
     for i in range(int(z1)):
-        x_temp, y_temp = transformations.rotate(x_rot1, y_rot1, pitch_angle1 * i)
+        x_temp, y_temp = transformations.rotate(x_tooth1, y_tooth1, pitch_angle1 * i)
         x_final, y_final = transformations.translate(x_temp, y_temp, x_offset, y_offset)
         ax.plot(x_final, y_final, '-', linewidth=1.5, color='blue')
 
     # Plot gear 2
-    z2, pitch_angle2, alignment_angle2 = gear2.teeth, gear2.pitch_angle, gear2.alignment_angle
+    z2, pitch_angle2 = gear2.teeth, gear2.pitch_angle
     initial_rotation2 = np.pi + (np.pi / z2)
-    x_rot2, y_rot2 = transformations.rotate(x_tooth2, y_tooth2, alignment_angle2 + initial_rotation2)
     for i in range(int(z2)):
-        x_temp, y_temp = transformations.rotate(x_rot2, y_rot2, pitch_angle2 * i)
+        x_temp, y_temp = transformations.rotate(x_tooth2, y_tooth2, initial_rotation2 + (pitch_angle2 * i))
         x_final, y_final = transformations.translate(x_temp, y_temp, x_offset + center_dist, y_offset)
         ax.plot(x_final, y_final, '-', linewidth=1.5, color='red')
 
