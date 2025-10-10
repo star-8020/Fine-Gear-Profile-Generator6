@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Tuple
+from typing import List, Tuple, Union
 
 import numpy as np
 
-from . import gear_math
-from . import transformations
+from . import gear_math, transformations
+from .models import Arc, Spline, StructuredToothProfile
 
 
 def involute_curve(
@@ -18,35 +18,35 @@ def involute_curve(
     theta_end: float,
     base_angle: float,
     start_angle: float,
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> List[Tuple[float, float]]:
     """Generate the involute flank curve."""
 
     theta_values = np.linspace(theta_start, theta_end, segment_count)
     radius = 0.5 * module * teeth * np.cos(base_angle) * np.sqrt(1 + theta_values**2)
     x_coords = radius * np.cos(start_angle + theta_values - np.arctan(theta_values))
     y_coords = radius * np.sin(start_angle + theta_values - np.arctan(theta_values))
-    return x_coords, y_coords
+    return list(zip(x_coords, y_coords))
 
 
 def edge_round_curve(
     module: float,
     tooth_edge_radius: float,
-    flank_x: np.ndarray,
-    flank_y: np.ndarray,
+    flank_vertices: List[Tuple[float, float]],
     edge_x: float,
     edge_y: float,
     edge_center_x: float,
     edge_center_y: float,
     segment_count: int,
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> List[Tuple[float, float]]:
     """Generate the rounded edge curve at the tooth tip."""
 
-    theta_min = np.arctan2((flank_y[-1] - edge_center_y), (flank_x[-1] - edge_center_x))
-    theta_max = np.arctan2((edge_y - edge_center_y), (edge_x - edge_center_x))
+    last_flank_vertex = flank_vertices[-1]
+    theta_min = np.arctan2(last_flank_vertex[1] - edge_center_y, last_flank_vertex[0] - edge_center_x)
+    theta_max = np.arctan2(edge_y - edge_center_y, edge_x - edge_center_x)
     theta_values = np.linspace(theta_min, theta_max, segment_count)
     x_coords = module * tooth_edge_radius * np.cos(theta_values) + edge_center_x
     y_coords = module * tooth_edge_radius * np.sin(theta_values) + edge_center_y
-    return x_coords, y_coords
+    return list(zip(x_coords, y_coords))
 
 
 def root_round_curve(
@@ -59,7 +59,7 @@ def root_round_curve(
     theta_end: float,
     alpha_transition: float,
     segment_count: int,
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> List[Tuple[float, float]]:
     """Generate the trochoidal root fillet curve."""
 
     theta_values = np.linspace(0, theta_end, segment_count)
@@ -86,7 +86,7 @@ def root_round_curve(
         * np.cos(theta_values + alpha_transition)
         - hob_edge_radius * np.sin(theta_s + theta_values + alpha_transition)
     )
-    return x_coords, y_coords
+    return list(zip(x_coords, y_coords))
 
 
 def outer_arc(
@@ -96,15 +96,11 @@ def outer_arc(
     addendum_factor: float,
     edge_angle: float,
     mid_angle: float,
-    segment_count: int,
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> Arc:
     """Generate the outer arc at the tooth tip (addendum circle)."""
 
-    theta_values = np.linspace(edge_angle, mid_angle, segment_count)
     radius = module * (teeth / 2 + addendum_factor + profile_shift)
-    x_coords = radius * np.cos(theta_values)
-    y_coords = radius * np.sin(theta_values)
-    return x_coords, y_coords
+    return Arc(center=(0, 0), radius=radius, start_angle=edge_angle, end_angle=mid_angle)
 
 
 def root_arc(
@@ -113,70 +109,11 @@ def root_arc(
     profile_shift: float,
     dedendum_factor: float,
     transition_angle: float,
-    segment_count: int,
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> Arc:
     """Generate the root arc at the bottom of the tooth space (dedendum circle)."""
 
-    theta_values = np.linspace(0, transition_angle, segment_count)
     radius = module * (teeth / 2 - dedendum_factor + profile_shift)
-    x_coords = radius * np.cos(theta_values)
-    y_coords = radius * np.sin(theta_values)
-    return x_coords, y_coords
-
-
-def combine_tooth_profile(
-    flank1_x: np.ndarray,
-    flank1_y: np.ndarray,
-    edge1_x: np.ndarray,
-    edge1_y: np.ndarray,
-    root1_x: np.ndarray,
-    root1_y: np.ndarray,
-    outer1_x: np.ndarray,
-    outer1_y: np.ndarray,
-    root_arc1_x: np.ndarray,
-    root_arc1_y: np.ndarray,
-    flank2_x: np.ndarray,
-    flank2_y: np.ndarray,
-    edge2_x: np.ndarray,
-    edge2_y: np.ndarray,
-    root2_x: np.ndarray,
-    root2_y: np.ndarray,
-    outer2_x: np.ndarray,
-    outer2_y: np.ndarray,
-    root_arc2_x: np.ndarray,
-    root_arc2_y: np.ndarray,
-) -> Tuple[np.ndarray, np.ndarray]:
-    """Combine all curve segments into a single continuous tooth profile."""
-
-    x_coords = np.concatenate(
-        (
-            outer2_x[1:],
-            edge2_x[1:],
-            flank2_x[1:],
-            root2_x[1:],
-            root_arc2_x[1:],
-            root_arc1_x,
-            root1_x[1:],
-            flank1_x[1:],
-            edge1_x[1:],
-            outer1_x[1:],
-        )
-    )
-    y_coords = np.concatenate(
-        (
-            outer2_y[1:],
-            edge2_y[1:],
-            flank2_y[1:],
-            root2_y[1:],
-            root_arc2_y[1:],
-            root_arc1_y,
-            root1_y[1:],
-            flank1_y[1:],
-            edge1_y[1:],
-            outer1_y[1:],
-        )
-    )
-    return x_coords, y_coords
+    return Arc(center=(0, 0), radius=radius, start_angle=0, end_angle=transition_angle)
 
 
 def _generate_tooth_profile_impl(
@@ -192,9 +129,11 @@ def _generate_tooth_profile_impl(
     segments_involute: int,
     segments_edge: int,
     segments_root_round: int,
-    segments_outer: int,
-    segments_root: int,
-) -> Tuple[np.ndarray, np.ndarray, float, float, float]:
+    use_structured_output: bool = True,
+) -> Union[
+    Tuple[np.ndarray, np.ndarray, float, float, float],
+    Tuple[StructuredToothProfile, float, float, float],
+]:
     """Generate a single gear tooth profile with associated metadata."""
 
     (teeth_calc, shift_calc, backlash_calc, addendum_calc, dedendum_calc,
@@ -224,7 +163,7 @@ def _generate_tooth_profile_impl(
         tooth_edge_calc,
     )
 
-    flank1_x, flank1_y = involute_curve(
+    flank1_vertices = involute_curve(
         module,
         teeth_calc,
         segments_involute,
@@ -233,25 +172,24 @@ def _generate_tooth_profile_impl(
         base_angle,
         involute_start_angle,
     )
-    flank2_x, flank2_y = transformations.reflect_y(flank1_x, flank1_y)
+    flank2_vertices = transformations.reflect_y_vertices(flank1_vertices)
 
     edge_x = module * ((teeth_calc / 2) + shift_calc + addendum_calc) * np.cos(edge_angle)
     edge_y = module * ((teeth_calc / 2) + shift_calc + addendum_calc) * np.sin(edge_angle)
     edge_center_x = module * (teeth_calc / 2 + shift_calc + addendum_calc - tooth_edge_calc) * np.cos(edge_angle)
     edge_center_y = module * (teeth_calc / 2 + shift_calc + addendum_calc - tooth_edge_calc) * np.sin(edge_angle)
 
-    edge1_x, edge1_y = edge_round_curve(
+    edge1_vertices = edge_round_curve(
         module,
         tooth_edge_calc,
-        flank1_x,
-        flank1_y,
+        flank1_vertices,
         edge_x,
         edge_y,
         edge_center_x,
         edge_center_y,
         segments_edge,
     )
-    edge2_x, edge2_y = transformations.reflect_y(edge1_x, edge1_y)
+    edge2_vertices = transformations.reflect_y_vertices(edge1_vertices)
 
     alpha_transition = (
         (2 * (hob_edge_calc * (1 - np.sin(base_angle)) - dedendum_calc) * np.sin(base_angle) + backlash_calc)
@@ -266,7 +204,7 @@ def _generate_tooth_profile_impl(
         / (teeth_calc * np.sin(base_angle))
     )
 
-    root1_x, root1_y = root_round_curve(
+    root1_vertices = root_round_curve(
         module,
         teeth_calc,
         shift_calc,
@@ -277,56 +215,44 @@ def _generate_tooth_profile_impl(
         alpha_transition,
         segments_root_round,
     )
-    root2_x, root2_y = transformations.reflect_y(root1_x, root1_y)
+    root2_vertices = transformations.reflect_y_vertices(root1_vertices)
 
-    outer1_x, outer1_y = outer_arc(
+    outer1_arc = outer_arc(
         module,
         teeth_calc,
         shift_calc,
         addendum_calc,
         edge_angle,
         mid_angle,
-        segments_outer,
     )
-    outer2_x, outer2_y = transformations.reflect_y(outer1_x, outer1_y)
+    outer2_arc = transformations.reflect_y_arc(outer1_arc)
 
-    root_arc1_x, root_arc1_y = root_arc(
+    root1_arc = root_arc(
         module,
         teeth_calc,
         shift_calc,
         dedendum_calc,
         alpha_transition,
-        segments_root,
     )
-    root_arc2_x, root_arc2_y = transformations.reflect_y(root_arc1_x, root_arc1_y)
+    root2_arc = transformations.reflect_y_arc(root1_arc)
 
-    tooth_x, tooth_y = combine_tooth_profile(
-        flank1_x,
-        flank1_y,
-        edge1_x,
-        edge1_y,
-        root1_x,
-        root1_y,
-        outer1_x,
-        outer1_y,
-        root_arc1_x,
-        root_arc1_y,
-        flank2_x,
-        flank2_y,
-        edge2_x,
-        edge2_y,
-        root2_x,
-        root2_y,
-        outer2_x,
-        outer2_y,
-        root_arc2_x,
-        root_arc2_y,
-    )
+    structured_profile = StructuredToothProfile(elements=[
+        outer2_arc,
+        Spline(vertices=edge2_vertices),
+        Spline(vertices=flank2_vertices),
+        Spline(vertices=root2_vertices),
+        root2_arc,
+        root1_arc,
+        Spline(vertices=root1_vertices),
+        Spline(vertices=flank1_vertices),
+        Spline(vertices=edge1_vertices),
+        outer1_arc,
+    ])
 
-    return tooth_x, tooth_y, float(teeth_calc), float(pitch_angle), float(alignment_angle)
+    return structured_profile, float(teeth_calc), float(pitch_angle), float(alignment_angle)
 
 
-def generate_tooth_profile(*args, **kwargs) -> Tuple[np.ndarray, np.ndarray, float, float, float]:
+def generate_tooth_profile(*args, **kwargs):
     """Public wrapper supporting both legacy kwargs and new positional arguments."""
 
     if kwargs:
@@ -343,8 +269,6 @@ def generate_tooth_profile(*args, **kwargs) -> Tuple[np.ndarray, np.ndarray, flo
             'SEG_INVOLUTE': 'segments_involute',
             'SEG_EDGE_R': 'segments_edge',
             'SEG_ROOT_R': 'segments_root_round',
-            'SEG_OUTER': 'segments_outer',
-            'SEG_ROOT': 'segments_root',
         }
         normalized = {}
         for legacy_key, new_key in key_map.items():
@@ -353,10 +277,10 @@ def generate_tooth_profile(*args, **kwargs) -> Tuple[np.ndarray, np.ndarray, flo
             normalized[new_key] = kwargs[legacy_key]
         return _generate_tooth_profile_impl(**normalized)
 
-    expected_args = 14
+    expected_args = 12
     if len(args) != expected_args:
         raise TypeError(
-            "generate_tooth_profile() expects 14 positional arguments or legacy keyword arguments"
+            f"generate_tooth_profile() expects {expected_args} positional arguments"
         )
 
     return _generate_tooth_profile_impl(*args)

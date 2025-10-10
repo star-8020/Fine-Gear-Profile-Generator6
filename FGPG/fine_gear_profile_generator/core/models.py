@@ -3,9 +3,33 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple, Union
 
 import numpy as np
+
+
+@dataclass
+class Arc:
+    """Represents a circular arc segment."""
+
+    center: Tuple[float, float]
+    radius: float
+    start_angle: float
+    end_angle: float
+
+
+@dataclass
+class Spline:
+    """Represents a spline curve defined by its vertices."""
+
+    vertices: List[Tuple[float, float]]
+
+
+@dataclass
+class StructuredToothProfile:
+    """A structured representation of a single tooth profile using geometric primitives."""
+
+    elements: List[Union[Arc, Spline]]
 
 
 @dataclass
@@ -35,8 +59,6 @@ class SegmentationSettings:
     involute: int
     edge: int
     root_round: int
-    outer: int
-    root: int
 
     def __post_init__(self) -> None:
         """Ensure that the segmentation counts are strictly positive integers."""
@@ -45,8 +67,6 @@ class SegmentationSettings:
             ("involute", self.involute),
             ("edge", self.edge),
             ("root_round", self.root_round),
-            ("outer", self.outer),
-            ("root", self.root),
         ):
             if value <= 0:
                 raise ValueError(f"Segmentation value '{name}' must be positive.")
@@ -93,8 +113,6 @@ class GearPairParameters:
             "SEG_INVOLUTE": self.segmentation.involute,
             "SEG_EDGE_R": self.segmentation.edge,
             "SEG_ROOT_R": self.segmentation.root_round,
-            "SEG_OUTER": self.segmentation.outer,
-            "SEG_ROOT": self.segmentation.root,
             "z2": self.driven.teeth,
             "x2": self.driven.profile_shift,
             "X_0": self.center_x,
@@ -109,8 +127,6 @@ class GearPairParameters:
             involute=int(params["SEG_INVOLUTE"]),
             edge=int(params["SEG_EDGE_R"]),
             root_round=int(params["SEG_ROOT_R"]),
-            outer=int(params["SEG_OUTER"]),
-            root=int(params["SEG_ROOT"]),
         )
         return cls(
             module=float(params["M"]),
@@ -140,17 +156,11 @@ class GearPairAnalysis:
 class GearProfileGeometry:
     """Generated geometric information for a single gear."""
 
-    coordinates: Tuple[np.ndarray, np.ndarray]
+    profile: Union[StructuredToothProfile, Tuple[np.ndarray, np.ndarray]]
     teeth: int
     pitch_angle: float
     alignment_angle: float
     undercut_status: str
-
-    def as_tuple(self) -> Tuple[np.ndarray, np.ndarray, int, float, float]:
-        """Return a tuple formatted for the plotting and export utilities."""
-
-        x_coords, y_coords = self.coordinates
-        return x_coords, y_coords, self.teeth, self.pitch_angle, self.alignment_angle
 
 
 @dataclass
@@ -169,13 +179,7 @@ class GearPairResult:
                 "contact_ratio": self.analysis.contact_ratio,
                 "center_distance": self.analysis.center_distance,
             },
-            "gear1": {
-                "profile": self.gear1.as_tuple(),
-                "undercut_status": self.gear1.undercut_status,
-            },
-            "gear2": {
-                "profile": self.gear2.as_tuple(),
-                "undercut_status": self.gear2.undercut_status,
-            },
+            "gear1": {"undercut_status": self.gear1.undercut_status},
+            "gear2": {"undercut_status": self.gear2.undercut_status},
         }
 
